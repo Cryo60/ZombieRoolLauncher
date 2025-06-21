@@ -23,12 +23,16 @@ __version__ = "1.0.0"
 # TRÈS IMPORTANT : Va sur ton fichier updates.json sur GitHub, clique sur "Raw",
 # et copie l'URL qui s'affiche dans ta barre d'adresse du navigateur. Elle doit commencer par
 # "https://raw.githubusercontent.com/...". Ne laisse pas une URL "github.com" classique.
-UPDATES_JSON_URL = "https://raw.githubusercontent.com/Cryo60/ZombieRoolLauncher/refs/heads/main/updates.json" # URL MISE À JOUR
+UPDATES_JSON_URL = "https://raw.githubusercontent.com/Cryo60/ZombieRoolLauncher/refs/heads/main/updates.json"
 
 # Nom de fichier du mod tel qu'il est typiquement dans le dossier mods (pour la détection locale)
 # Adapte ce nom pour correspondre au format réel de tes fichiers de mod.
 # Ex: si ton mod s'appelle 'ZombieRool-1.3.0.jar', tu pourrais utiliser 'ZombieRool-'
 MOD_FILE_PREFIX = "ZombieRool-" 
+
+# Chemin du fichier de configuration local pour sauvegarder les chemins Minecraft
+CONFIG_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
+
 
 # --- FONCTIONS UTILITAIRES POUR LES CHEMINS MINECRAFT ---
 def get_default_minecraft_path():
@@ -63,21 +67,37 @@ def get_minecraft_sub_paths(mc_path):
             'resourcepacks': os.path.join(mc_path, 'resourcepacks')
         }
         # Vérifie si tous les sous-dossiers nécessaires existent.
-        # Il est possible que certains de ces dossiers n'existent pas encore dans une nouvelle instance.
         # On ne les crée pas ici, mais on s'assure que le dossier de base existe.
         # La création des sous-dossiers sera gérée lors de l'installation si nécessaire.
-        if os.path.isdir(paths['mods']) and os.path.isdir(paths['saves']) and os.path.isdir(paths['resourcepacks']):
-             return paths
-        elif os.path.isdir(mc_path): # Si le dossier principal existe, on peut essayer de créer les sous-dossiers
-            try:
-                os.makedirs(paths['mods'], exist_ok=True)
-                os.makedirs(paths['saves'], exist_ok=True)
-                os.makedirs(paths['resourcepacks'], exist_ok=True)
-                return paths
-            except OSError as e:
-                print(f"Erreur lors de la création des sous-dossiers Minecraft : {e}")
-                return None
+        # Ajout de `exist_ok=True` pour gérer les cas où les dossiers sont déjà là.
+        try:
+            os.makedirs(paths['mods'], exist_ok=True)
+            os.makedirs(paths['saves'], exist_ok=True)
+            os.makedirs(paths['resourcepacks'], exist_ok=True)
+            return paths
+        except OSError as e:
+            print(f"Erreur lors de la création/vérification des sous-dossiers Minecraft : {e}")
+            return None
     return None
+
+# --- FONCTIONS UTILITAIRES POUR LA CONFIGURATION LOCALE ---
+def load_config():
+    """Charge la configuration depuis un fichier JSON local."""
+    if os.path.exists(CONFIG_FILE_PATH):
+        try:
+            with open(CONFIG_FILE_PATH, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"Erreur lors du chargement du fichier de configuration : {e}")
+    return {}
+
+def save_config(config_data):
+    """Sauvegarde la configuration dans un fichier JSON local."""
+    try:
+        with open(CONFIG_FILE_PATH, 'w', encoding='utf-8') as f:
+            json.dump(config_data, f, indent=4)
+    except IOError as e:
+        print(f"Erreur lors de la sauvegarde du fichier de configuration : {e}")
 
 # --- THREAD POUR LES OPÉRATIONS RÉSEAU NON BLOQUANTES ---
 # Il est crucial d'effectuer les requêtes réseau (téléchargement du updates.json)
@@ -205,7 +225,7 @@ class ZombieRoolLauncher(QMainWindow):
         self.main_layout.addWidget(self.status_bar)
 
         # --- Initialisation et vérifications au démarrage ---
-        self.init_minecraft_paths() # Initialise l'affichage des chemins Minecraft et invite l'utilisateur
+        self.load_saved_minecraft_path() # Tente de charger le chemin Minecraft sauvegardé
         self.check_for_updates() # Lance la vérification des mises à jour depuis GitHub
 
     # --- Configuration des onglets ---
@@ -302,18 +322,30 @@ class ZombieRoolLauncher(QMainWindow):
         layout.addStretch()
 
     # --- Fonctions de logique des chemins Minecraft ---
-    def init_minecraft_paths(self):
+    def load_saved_minecraft_path(self):
         """
-        Initialise les chemins Minecraft en invitant l'utilisateur à les configurer manuellement.
-        (La détection automatique a été supprimée à la demande de l'utilisateur).
+        Tente de charger le chemin Minecraft sauvegardé depuis le fichier de configuration.
+        Si un chemin est trouvé et valide, le définit. Sinon, invite l'utilisateur à configurer.
         """
-        QMessageBox.information(self, "Configuration du Chemin Minecraft",
-                                "Bienvenue ! Veuillez sélectionner le dossier de votre instance Minecraft (contenant les dossiers 'mods', 'saves', 'resourcepacks') dans l'onglet 'Paramètres' en cliquant sur 'Parcourir...'.")
-        self.mc_path_input.setText("Chemin non configuré")
-        self.mods_path_label.setText("Dossier Mods : Non configuré")
-        self.saves_path_label.setText("Dossier Saves : Non configuré")
-        self.resourcepacks_path_label.setText("Dossier Resourcepacks : Non configuré")
-
+        config = load_config()
+        saved_path = config.get('minecraft_path')
+        if saved_path:
+            self.set_minecraft_path(saved_path, show_message=False) # Ne pas afficher de message au démarrage
+            if not self.minecraft_paths: # Si le chemin chargé n'est plus valide
+                 QMessageBox.warning(self, "Chemin Minecraft Invalide",
+                                    "Le chemin Minecraft sauvegardé n'est plus valide ou n'existe plus. Veuillez le reconfigurer dans l'onglet 'Paramètres'.")
+                 self.mc_path_input.setText("Chemin non configuré")
+                 self.mods_path_label.setText("Dossier Mods : Non configuré")
+                 self.saves_path_label.setText("Dossier Saves : Non configuré")
+                 self.resourcepacks_path_label.setText("Dossier Resourcepacks : Non configuré")
+        else:
+            # Si aucun chemin n'est sauvegardé, affiche le message d'invitation initial
+            QMessageBox.information(self, "Configuration du Chemin Minecraft",
+                                    "Bienvenue ! Veuillez sélectionner le dossier de votre instance Minecraft (contenant les dossiers 'mods', 'saves', 'resourcepacks') dans l'onglet 'Paramètres' en cliquant sur 'Parcourir...'.")
+            self.mc_path_input.setText("Chemin non configuré")
+            self.mods_path_label.setText("Dossier Mods : Non configuré")
+            self.saves_path_label.setText("Dossier Saves : Non configuré")
+            self.resourcepacks_path_label.setText("Dossier Resourcepacks : Non configuré")
 
     def browse_minecraft_path(self):
         """
@@ -321,18 +353,18 @@ class ZombieRoolLauncher(QMainWindow):
         manuellement le dossier de son instance Minecraft.
         """
         # Propose le chemin par défaut comme point de départ pour la sélection (si détecté)
-        initial_path = get_default_minecraft_path() if get_default_minecraft_path() else os.path.expanduser('~')
+        initial_path = self.mc_path_input.text() if self.mc_path_input.text() and os.path.exists(self.mc_path_input.text()) else (get_default_minecraft_path() if get_default_minecraft_path() else os.path.expanduser('~'))
         
         selected_path = QFileDialog.getExistingDirectory(self, "Sélectionner le dossier de l'instance Minecraft", initial_path)
         if selected_path:
-            self.set_minecraft_path(selected_path)
-            # Pas de QMessageBox ici, set_minecraft_path s'en charge si succès/échec
+            self.set_minecraft_path(selected_path, show_message=True)
         else:
             QMessageBox.warning(self, "Sélection Annulée", "La sélection du dossier Minecraft a été annulée.")
 
-    def set_minecraft_path(self, path):
+    def set_minecraft_path(self, path, show_message=True):
         """
         Met à jour les chemins Minecraft dans l'UI et stocke les chemins validés.
+        Sauvegarde le chemin dans la configuration locale.
         """
         self.mc_path_input.setText(path)
         sub_paths = get_minecraft_sub_paths(path)
@@ -341,16 +373,30 @@ class ZombieRoolLauncher(QMainWindow):
             self.mods_path_label.setText(f"Dossier Mods : {self.minecraft_paths['mods']}")
             self.saves_path_label.setText(f"Dossier Saves : {self.minecraft_paths['saves']}")
             self.resourcepacks_path_label.setText(f"Dossier Resourcepacks : {self.minecraft_paths['resourcepacks']}")
-            # TODO: Sauvegarder ces chemins pour les prochaines utilisations (ex: dans un fichier config local)
-            QMessageBox.information(self, "Chemin Minecraft Configuré", 
-                                    f"Le dossier Minecraft a été configuré manuellement : {path}")
+            
+            # Sauvegarde le chemin validé dans le fichier de configuration
+            config = load_config()
+            config['minecraft_path'] = path
+            save_config(config)
+
+            if show_message:
+                QMessageBox.information(self, "Chemin Minecraft Configuré", 
+                                        f"Le dossier Minecraft a été configuré manuellement : {path}")
         else:
             self.minecraft_paths = None
             self.mods_path_label.setText("Dossier Mods : Introuvable ou chemin invalide")
             self.saves_path_label.setText("Dossier Saves : Introuvable ou chemin invalide")
             self.resourcepacks_path_label.setText("Dossier Resourcepacks : Introuvable ou chemin invalide")
-            QMessageBox.warning(self, "Chemin Invalide", 
-                                "Le chemin sélectionné ne semble pas être une instance Minecraft valide (dossiers 'mods', 'saves', 'resourcepacks' introuvables).")
+            
+            # Supprime le chemin invalide de la config s'il existait
+            config = load_config()
+            if 'minecraft_path' in config:
+                del config['minecraft_path']
+                save_config(config)
+
+            if show_message:
+                QMessageBox.warning(self, "Chemin Invalide", 
+                                    "Le chemin sélectionné ne semble pas être une instance Minecraft valide (dossiers 'mods', 'saves', 'resourcepacks' introuvables).")
 
     # --- Fonctions de Vérification et Traitement des Mises à Jour ---
     def check_for_updates(self):
@@ -708,15 +754,16 @@ class ZombieRoolLauncher(QMainWindow):
         # Démarrer le téléchargement de la map
         self.map_downloader = FileDownloaderThread(map_download_url, temp_map_path)
         self.map_downloader.download_progress.connect(progress_bar.setValue)
-        # Utiliser lambda pour passer des arguments supplémentaires à la fonction de fin
+        # CORRECTION : Passer rp_filename explicitement à _install_map_files
         self.map_downloader.download_finished.connect(
-            lambda path=temp_map_path, rp_url=rp_download_url, rp_path=temp_rp_path, map_name=map_info['name'], pb=progress_bar: 
-            self._install_map_files(path, rp_url, rp_path, map_name, pb)
+            lambda path=temp_map_path, rp_url=rp_download_url, rp_path=temp_rp_path, map_name=map_info['name'], pb=progress_bar, rp_file_name_val=rp_filename: 
+            self._install_map_files(path, rp_url, rp_path, map_name, pb, rp_file_name_val)
         )
         self.map_downloader.download_error.connect(lambda msg: self._handle_map_download_error(msg, progress_bar))
         self.map_downloader.start()
 
-    def _install_map_files(self, temp_map_path, rp_download_url, temp_rp_path, map_name, progress_bar):
+    # CORRECTION : Ajout de rp_filename_val comme paramètre
+    def _install_map_files(self, temp_map_path, rp_download_url, temp_rp_path, map_name, progress_bar, rp_filename_val):
         """
         Décompresse la map, télécharge et décompresse le resource pack si présent.
         """
@@ -733,7 +780,7 @@ class ZombieRoolLauncher(QMainWindow):
                 map_folder_name = os.path.commonprefix(zip_ref.namelist())
                 zip_ref.extractall(saves_dir)
                 # Renommer le dossier si nécessaire pour correspondre à map_name (facultatif mais propre)
-                extracted_path = os.path.join(saves_dir, map_folder_name.split('/')[0]) # Prends le nom du dossier racine
+                extracted_path = os.grav_path.join(saves_dir, map_folder_name.split('/')[0]) # Prends le nom du dossier racine
                 if os.path.exists(extracted_path) and os.path.basename(extracted_path) != map_name:
                     # Ne pas renommer s'il y a un conflit, juste informer
                     if not os.path.exists(os.path.join(saves_dir, map_name)):
@@ -752,18 +799,20 @@ class ZombieRoolLauncher(QMainWindow):
                 self.rp_downloader = FileDownloaderThread(rp_download_url, temp_rp_path)
                 self.rp_downloader.download_progress.connect(progress_bar.setValue)
                 self.rp_downloader.download_finished.connect(
-                    lambda path=temp_rp_path, rp_name=rp_filename: self._install_resource_pack_from_temp(path, rp_name, progress_bar)
+                    # CORRECTION : Utiliser rp_filename_val ici
+                    lambda path=temp_rp_path, rp_name_for_install=rp_filename_val: self._install_resource_pack_from_temp(path, rp_name_for_install, progress_bar)
                 )
                 self.rp_downloader.download_error.connect(lambda msg: self._handle_map_download_error(msg, progress_bar, is_rp=True))
                 self.rp_downloader.start()
             else:
-                QMessageBox.information(self, "Installation Terminée", f"Map '{map_name}' installée avec succès !")
+                QMessageBox.information(self, "Installation Terminée", f"Map '{map_name}' installée avec succès ! (Pas de Resource Pack associé)")
+                # La vérification de maj du mod et la mise à jour des statuts est déplacée
+                # après l'installation complète du RP, ou ici si pas de RP.
                 self.mod_status_label.setText("Statut du Mod: Vérification en cours...") # Réactualise après installation
-                self._get_local_mod_version() # Mettre à jour la version locale après installation
                 self._check_mod_update_logic() # Pour forcer la vérification de maj après install
                 progress_bar.hide() # Assure que la barre est cachée
         except zipfile.BadZipFile:
-            QMessageBox.critical(self, "Erreur de décompression", "Le fichier ZIP de la map est corrompu ou invalide.")
+            QMessageBox.critical(self, "Erreur de décompression", "Le fichier ZIP de la map est corrompu ou invalide. Le module 'zipfile' ne supporte que le format ZIP (pas RAR).")
         except Exception as e:
             QMessageBox.critical(self, "Erreur d'Installation Map", f"Une erreur est survenue lors de l'installation de la map : {e}")
         finally:
@@ -804,7 +853,6 @@ class ZombieRoolLauncher(QMainWindow):
                 shutil.rmtree(os.path.dirname(temp_rp_path))
         
         self.mod_status_label.setText("Statut du Mod: Vérification en cours...") # Réactualise après installation
-        self._get_local_mod_version() # Mettre à jour la version locale après installation
         self._check_mod_update_logic() # Pour forcer la vérification de maj après install
 
 
