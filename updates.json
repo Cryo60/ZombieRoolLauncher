@@ -1,0 +1,22 @@
+{
+  "launcher": {
+    "latest_version": "1.0.0",
+    "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/release-v1.0.0-initial/ZombieRoolLauncher_v1.0.0.exe"
+  },
+  "mod": {
+    "name": "ZombieRool",
+    "latest_version": "1.4.0",
+    "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/release-v1.0.0-initial/ZombieRool-1.3.0.jar",
+    "changelog_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/tag/release-v1.0.0-initial"
+  },
+  "maps": [
+    {
+      "id": "asylum",
+      "name": "The Asylum Map",
+      "latest_version": "1.0.0",
+      "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/release-v1.0.0-initial/The_Asylum_Map_v1.0.0.zip",
+      "resourcepack_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/release-v1.0.0-initial/The_Asylum_RP_v1.0.0.zip",
+      "description": "Inspiré de Verruckt"
+    }
+  ]
+}
