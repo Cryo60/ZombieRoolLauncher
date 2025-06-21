@@ -3,24 +3,34 @@ import os
 import platform
 import json
 import requests
-import shutil # Pour la copie et la suppression de fichiers/dossiers
-import zipfile # Pour décompresser les fichiers .zip
+import shutil # For copying and deleting files/folders
+import zipfile # For decompressing .zip files
+import subprocess # For launching external processes (needed for updates)
+import time # For pausing in the update script
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout,
     QHBoxLayout, QPushButton, QLabel, QTabWidget,
-    QProgressBar, QMessageBox, QFileDialog, QLineEdit
+    QProgressBar, QMessageBox, QFileDialog, QLineEdit, QTextEdit, QCheckBox, QScrollArea # Import QScrollArea
 )
 from PyQt6.QtCore import Qt, QUrl, QThread, pyqtSignal, QVersionNumber
-from PyQt6.QtGui import QDesktopServices # Pour ouvrir des liens externes
+from PyQt6.QtGui import QDesktopServices # For opening external links
+
+# Import PyGithub
+try:
+    from github import Github, GithubException
+except ImportError:
+    QMessageBox.critical(None, "Error", "PyGithub library not found. Please install it: pip install PyGithub")
+    sys.exit(1)
+
 
 # --- GLOBAL CONFIGURATION ---
 # Current version of your launcher. This version will be compared by the launcher
 # with the one on GitHub to know if it needs to update itself.
-__version__ = "1.0.0" 
+__version__ = "2.1.0" 
 
 # Direct URL to the updates.json file on your GitHub repository.
-# VERY IMPORTANT: Go to your updates.json file on GitHub, click on "Raw",
+# IMPORTANT: Go to your updates.json file on GitHub, click on "Raw",
 # and copy the URL that appears in your browser's address bar. It must start with
 # "https://raw.githubusercontent.com/...". Do not use a classic "github.com" URL.
 UPDATES_JSON_URL = "https://raw.githubusercontent.com/Cryo60/ZombieRoolLauncher/refs/heads/main/updates.json"
@@ -30,8 +40,28 @@ UPDATES_JSON_URL = "https://raw.githubusercontent.com/Cryo60/ZombieRoolLauncher/
 # Ex: if your mod is named 'ZombieRool-1.3.0.jar', you could use 'ZombieRool-'
 MOD_FILE_PREFIX = "ZombieRool-" 
 
+# GitHub Repository Information for Map Uploads (YOU MUST CONFIGURE THESE!)
+# Replace with your GitHub organization/user name and repository name
+# Example: "Cryo60" and "ZombieRoolLauncher"
+GITHUB_REPO_OWNER = "Cryo60"  # Your GitHub username
+GITHUB_REPO_NAME = "ZombieRoolLauncher" # The name of your repository
+
 # Path to the local configuration file to save Minecraft paths
-CONFIG_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
+# MODIFICATION: Use platform-specific application data directory for persistent config
+def get_config_file_path():
+    if platform.system() == "Windows":
+        # Use APPDATA for roaming profiles (config that follows user)
+        # or LOCALAPPDATA for local machine config
+        app_data_dir = os.path.join(os.getenv('APPDATA'), 'ZombieRoolLauncher')
+    elif platform.system() == "Darwin": # macOS
+        app_data_dir = os.path.join(os.path.expanduser('~'), 'Library', 'Application Support', 'ZombieRoolLauncher')
+    else: # Linux and others
+        app_data_dir = os.path.join(os.path.expanduser('~'), '.config', 'ZombieRoolLauncher') # XDG Base Directory Specification
+    
+    os.makedirs(app_data_dir, exist_ok=True) # Ensure the directory exists
+    return os.path.join(app_data_dir, 'config.json')
+
+CONFIG_FILE_PATH = get_config_file_path()
 
 
 # --- UTILITY FUNCTIONS FOR MINECRAFT PATHS ---
@@ -68,7 +98,6 @@ def get_minecraft_sub_paths(mc_path):
         }
         # Checks if all necessary subfolders exist.
         # We don't create them here, but we ensure that the base folder exists.
-        # Subfolder creation will be handled during installation if necessary.
         # Added `exist_ok=True` to handle cases where folders already exist.
         try:
             os.makedirs(paths['mods'], exist_ok=True)
@@ -94,6 +123,8 @@ def load_config():
 def save_config(config_data):
     """Saves configuration to a local JSON file."""
     try:
+        # Ensure the directory for the config file exists
+        os.makedirs(os.path.dirname(CONFIG_FILE_PATH), exist_ok=True)
         with open(CONFIG_FILE_PATH, 'w', encoding='utf-8') as f:
             json.dump(config_data, f, indent=4)
     except IOError as e:
@@ -109,10 +140,11 @@ class UpdateCheckerThread(QThread):
     # Signal emitted in case of an error during the request
     error_occurred = pyqtSignal(str)
     
-    def __init__(self, url):
+    def __init__(self, url, cache_bust=False): # Add cache_bust parameter
         super().__init__()
         self.url = url
         self.update_data = None # Will store JSON data after download
+        self.cache_bust = cache_bust
 
     def run(self):
         """
@@ -120,7 +152,13 @@ class UpdateCheckerThread(QThread):
         It downloads the JSON file from the URL.
         """
         try:
-            response = requests.get(self.url, timeout=10) # Timeout to prevent too long a block
+            fetch_url = self.url
+            if self.cache_bust:
+                # Add a unique timestamp to the URL to bypass caching
+                fetch_url = f"{self.url}?_={int(time.time() * 1000)}"
+                print(f"Fetching updates.json with cache bust: {fetch_url}") # For debug/visibility
+
+            response = requests.get(fetch_url, timeout=10) # Timeout to prevent too long a block
             response.raise_for_status() # Raises an exception for HTTP error codes (4xx or 5xx)
             self.update_data = response.json() # Parses the JSON response
             self.update_data_ready.emit() # Emits the success signal
@@ -171,6 +209,294 @@ class FileDownloaderThread(QThread):
         except Exception as e:
             self.download_error.emit(f"Unexpected error during download: {e}")
 
+# --- THREAD FOR GITHUB UPLOAD OPERATIONS ---
+class GitHubUploaderThread(QThread):
+    upload_progress = pyqtSignal(str) # For status updates
+    upload_finished = pyqtSignal(dict) # Contains map_info and uploaded asset URLs
+    upload_error = pyqtSignal(str)
+
+    def __init__(self, github_token, map_info, map_zip_path, rp_zip_path=None):
+        super().__init__()
+        self.github_token = github_token
+        self.map_info = map_info
+        self.map_zip_path = map_zip_path
+        self.rp_zip_path = rp_zip_path
+        self.uploaded_assets = {} # To store {asset_name: download_url}
+
+    def run(self):
+        try:
+            self.upload_progress.emit("Connecting to GitHub...")
+            g = Github(self.github_token)
+            
+            # Get user to validate token
+            try:
+                g.get_user().login
+            except GithubException as e:
+                self.upload_error.emit(f"GitHub authentication error: {e.data.get('message', 'Invalid token or insufficient permissions')}")
+                return
+
+            repo = g.get_user(GITHUB_REPO_OWNER).get_repo(GITHUB_REPO_NAME)
+            self.upload_progress.emit(f"Connected to repository: {repo.full_name}")
+
+            # Define release details
+            release_tag = f"map-{self.map_info['id']}-v{self.map_info['latest_version']}"
+            release_title = f"Map: {self.map_info['name']} v{self.map_info['latest_version']}"
+            release_message = self.map_info.get('description', 'New map release.')
+
+            # Check if tag already exists
+            try:
+                repo.get_git_ref(f"tags/{release_tag}")
+                self.upload_error.emit(f"Error: A release with tag '{release_tag}' already exists. Please increment the map version.")
+                return
+            except GithubException as e:
+                if e.status != 404: # If not 404 (not found), it's another error
+                    raise e # Re-raise if it's a real error, otherwise continue
+
+            self.upload_progress.emit(f"Creating GitHub release: {release_title}...")
+            release = repo.create_git_release(
+                tag=release_tag,
+                name=release_title,
+                message=release_message,
+                prerelease=False, 
+                draft=False 
+            )
+            self.upload_progress.emit(f"Release created: {release.html_url}")
+
+            # Upload map file
+            self.upload_progress.emit(f"Uploading map file: {os.path.basename(self.map_zip_path)}...")
+            uploaded_map_asset = release.upload_asset(self.map_zip_path, name=os.path.basename(self.map_zip_path))
+            self.uploaded_assets[os.path.basename(self.map_zip_path)] = uploaded_map_asset.browser_download_url
+            self.upload_progress.emit(f"Map file uploaded.")
+
+            # Upload resource pack file if applicable
+            if self.rp_zip_path and os.path.exists(self.rp_zip_path):
+                self.upload_progress.emit(f"Uploading resource pack file: {os.path.basename(self.rp_zip_path)}...")
+                uploaded_rp_asset = release.upload_asset(self.rp_zip_path, name=os.path.basename(self.rp_zip_path))
+                self.uploaded_assets[os.path.basename(self.rp_zip_path)] = uploaded_rp_asset.browser_download_url
+                self.upload_progress.emit(f"Resource pack file uploaded.")
+
+            # Update updates.json
+            self.upload_progress.emit("Updating updates.json...")
+            self._update_remote_updates_json(repo, release)
+
+            self.upload_finished.emit(self.map_info)
+
+        except GithubException as e:
+            self.upload_error.emit(f"GitHub operation failed: {e.data.get('message', str(e))}. Please check your token permissions (should include 'Contents' read/write for this repository).")
+        except Exception as e:
+            self.upload_error.emit(f"An unexpected error occurred during upload: {e}")
+
+    def _update_remote_updates_json(self, repo, release_info):
+        """
+        Reads updates.json from GitHub, modifies it with new map data,
+        and pushes it back to GitHub.
+        """
+        updates_json_path = "updates.json" # Relative path on GitHub
+        current_json_content = None
+        updates_data = {}
+        updates_file_sha = None
+
+        try:
+            contents = repo.get_contents(updates_json_path, ref="main") # Assuming main branch
+            current_json_content = contents.decoded_content.decode('utf-8')
+            updates_data = json.loads(current_json_content)
+            updates_file_sha = contents.sha # Keep SHA for file update
+            self.upload_progress.emit(f"'{updates_json_path}' loaded from GitHub.")
+        except GithubException as e:
+            if e.status == 404:
+                self.upload_progress.emit(f"WARNING: '{updates_json_path}' not found on GitHub. Creating a new base file.")
+                updates_data = {
+                    "launcher": {"latest_version": "0.0.0", "download_url": ""},
+                    "mod": {"name": "NomDuMod", "latest_version": "0.0.0", "download_url": "", "changelog_url": ""},
+                    "maps": []
+                }
+            else:
+                raise # Re-raise other GitHub exceptions
+        except json.JSONDecodeError as e:
+            raise Exception(f"ERROR: '{updates_json_path}' on GitHub is invalid (malformed JSON): {e}")
+
+        # Construct the new map entry
+        new_map_entry = {
+            "id": self.map_info['id'],
+            "name": self.map_info['name'],
+            "latest_version": self.map_info['latest_version'],
+            "download_url": self.uploaded_assets.get(os.path.basename(self.map_zip_path), ""),
+            "description": self.map_info['description']
+        }
+        if self.rp_zip_path and os.path.exists(self.rp_zip_path):
+            new_map_entry["resourcepack_url"] = self.uploaded_assets.get(os.path.basename(self.rp_zip_path), "")
+
+        # Check if the map already exists (by ID) and update it, otherwise add it
+        found_map = False
+        if "maps" not in updates_data:
+            updates_data["maps"] = []
+        for i, map_obj in enumerate(updates_data["maps"]):
+            if map_obj.get("id") == self.map_info['id']:
+                updates_data["maps"][i] = new_map_entry
+                self.upload_progress.emit(f"Map '{self.map_info['id']}' updated in updates.json.")
+                found_map = True
+                break
+        if not found_map:
+            updates_data["maps"].append(new_map_entry)
+            self.upload_progress.emit(f"New map '{self.map_info['id']}' added to updates.json.")
+        
+        # Commit and push the updated JSON
+        new_json_content = json.dumps(updates_data, indent=4, ensure_ascii=False) # ensure_ascii=False for UTF-8 chars
+        
+        commit_message = f"feat: Add/Update map {self.map_info['name']} (v{self.map_info['latest_version']}) via launcher"
+        if updates_file_sha: # File existed, update it
+            repo.update_file(
+                path=updates_json_path,
+                message=commit_message,
+                content=new_json_content,
+                sha=updates_file_sha,
+                branch="main" 
+            )
+        else: # File did not exist, create it
+            repo.create_file(
+                path=updates_json_path,
+                message=commit_message,
+                content=new_json_content,
+                branch="main"
+            )
+        self.upload_progress.emit(f"'{updates_json_path}' updated and pushed to GitHub successfully!")
+
+# --- THREAD FOR GITHUB DELETION OPERATIONS ---
+class GitHubDeleterThread(QThread):
+    deletion_progress = pyqtSignal(str)
+    deletion_finished = pyqtSignal(str) # Emits the ID of the deleted map
+    deletion_error = pyqtSignal(str)
+
+    def __init__(self, github_token, map_id_to_delete):
+        super().__init__()
+        self.github_token = github_token
+        self.map_id_to_delete = map_id_to_delete
+
+    def run(self):
+        try:
+            self.deletion_progress.emit("Connecting to GitHub for deletion...")
+            g = Github(self.github_token)
+            
+            try:
+                g.get_user().login
+            except GithubException as e:
+                self.deletion_error.emit(f"GitHub authentication error: {e.data.get('message', 'Invalid token or insufficient permissions')}")
+                return
+
+            repo = g.get_user(GITHUB_REPO_OWNER).get_repo(GITHUB_REPO_NAME)
+            self.deletion_progress.emit(f"Connected to repository: {repo.full_name}")
+
+            # 1. Delete associated GitHub releases
+            self.deletion_progress.emit(f"Searching for releases for map ID '{self.map_id_to_delete}'...")
+            
+            releases_deleted_count = 0
+            # Get all releases. Convert to list to avoid issues with modifying collection during iteration.
+            # Make a copy to iterate because we are deleting elements
+            all_releases_found = list(repo.get_releases())
+            for release in all_releases_found: 
+                # Check if the release's tag name starts with our map ID pattern
+                if release.tag_name and release.tag_name.startswith(f"map-{self.map_id_to_delete}-"):
+                    try:
+                        self.deletion_progress.emit(f"Attempting to delete release '{release.title}' (tag: {release.tag_name})...")
+                        release.delete_release()
+                        releases_deleted_count += 1
+                        self.deletion_progress.emit(f"Successfully deleted release: {release.title}")
+                    except GithubException as e:
+                        error_msg = e.data.get('message', str(e))
+                        self.deletion_progress.emit(f"Warning: Could not delete release '{release.title}'. Status: {e.status}, Message: {error_msg}. "
+                                                    f"Please ensure your token has 'Releases' (write) permission for this repository.")
+                        print(f"DEBUG: GitHubException during release deletion (Status: {e.status}, Data: {e.data})")
+            
+            self.deletion_progress.emit(f"Deleted {releases_deleted_count} associated GitHub releases. Waiting 2 seconds for GitHub propagation...")
+            time.sleep(2) # Give GitHub some time to process deletions
+
+            # 2. Delete associated Git tag references (for robustness, in case some tags were orphaned or not part of a release)
+            self.deletion_progress.emit(f"Searching for and deleting associated Git tags for map ID '{self.map_id_to_delete}'...")
+            tags_deleted_count = 0
+            # Get all tags. Convert to list to avoid issues with modifying collection during iteration.
+            all_tags_found = list(repo.get_tags())
+            for tag in all_tags_found: 
+                if tag.name.startswith(f"map-{self.map_id_to_delete}-"):
+                    try:
+                        # Get the GitRef object for the tag
+                        git_ref_path = f"tags/{tag.name}"
+                        git_ref = repo.get_git_ref(git_ref_path)
+                        self.deletion_progress.emit(f"Attempting to delete Git tag reference '{tag.name}'...")
+                        git_ref.delete()
+                        tags_deleted_count += 1
+                        self.deletion_progress.emit(f"Successfully deleted tag: {tag.name}")
+                    except GithubException as e:
+                        error_msg = e.data.get('message', str(e))
+                        if e.status == 404:
+                            self.deletion_progress.emit(f"Tag '{tag.name}' not found, possibly already deleted by release deletion or previously missing.")
+                        else:
+                            self.deletion_progress.emit(f"Warning: Could not delete Git tag reference '{tag.name}'. Status: {e.status}, Message: {error_msg}. "
+                                                        f"Please ensure your token has 'Git tags' (write) permission for this repository.")
+                            print(f"DEBUG: GitHubException during tag deletion (Status: {e.status}, Data: {e.data})")
+            self.deletion_progress.emit(f"Deleted {tags_deleted_count} associated Git tags. Waiting 2 seconds for GitHub propagation...")
+            time.sleep(2) # Give GitHub some time to process deletions
+
+            # 3. Update updates.json to remove the map entry
+            self.deletion_progress.emit("Updating updates.json...")
+            updates_json_path = "updates.json"
+            updates_data = {}
+            updates_file_sha = None
+
+            try:
+                contents = repo.get_contents(updates_json_path, ref="main")
+                current_json_content = contents.decoded_content.decode('utf-8')
+                updates_data = json.loads(current_json_content)
+                updates_file_sha = contents.sha
+                self.deletion_progress.emit(f"'{updates_json_path}' loaded from GitHub.")
+            except GithubException as e:
+                if e.status == 404:
+                    self.deletion_error.emit(f"Error: '{updates_json_path}' not found on GitHub. Cannot delete entry. Please ensure this file exists in your repository.")
+                    return
+                else:
+                    raise # Re-raise other GitHub exceptions
+            except json.JSONDecodeError as e:
+                self.deletion_error.emit(f"ERROR: '{updates_json_path}' on GitHub is invalid (malformed JSON): {e}. Cannot delete entry. Please check the file's content on GitHub.")
+                return
+
+
+            # Filter out the map to be deleted
+            if "maps" in updates_data:
+                initial_map_count = len(updates_data["maps"])
+                updates_data["maps"] = [
+                    map_obj for map_obj in updates_data["maps"]
+                    if map_obj.get("id") != self.map_id_to_delete
+                ]
+                if len(updates_data["maps"]) < initial_map_count:
+                    self.deletion_progress.emit(f"Map ID '{self.map_id_to_delete}' removed from updates.json.")
+                else:
+                    self.deletion_progress.emit(f"Map ID '{self.map_id_to_delete}' was not found in updates.json (it might have been deleted manually or previously).")
+
+            # Commit and push the updated JSON
+            new_json_content = json.dumps(updates_data, indent=4, ensure_ascii=False)
+            commit_message = f"chore: Remove map {self.map_id_to_delete} via launcher"
+            
+            repo.update_file(
+                path=updates_json_path,
+                message=commit_message,
+                content=new_json_content,
+                sha=updates_file_sha,
+                branch="main" 
+            )
+            self.deletion_progress.emit(f"'{updates_json_path}' updated and pushed to GitHub successfully!")
+
+            self.deletion_finished.emit(self.map_id_to_delete)
+
+        except GithubException as e:
+            # General GitHub error for deletion
+            self.deletion_error.emit(f"Échec de l'opération GitHub lors de la suppression : {e.data.get('message', str(e))}. "
+                                    "Veuillez vous assurer que votre Personal Access Token GitHub dispose des permissions suffisantes "
+                                    "(par exemple, le scope 'repo' complet ou spécifiquement 'contents:write', 'releases:write', 'delete_repo' pour ce dépôt, et 'write:discussion' si vous avez l'option).")
+            print(f"DEBUG: Critical GitHubException during deletion (Status: {e.status}, Data: {e.data})")
+        except Exception as e:
+            self.deletion_error.emit(f"Une erreur inattendue est survenue lors de la suppression : {e}")
+            print(f"DEBUG: Unexpected error during deletion: {e}")
+
+
 # --- MAIN LAUNCHER CLASS ---
 class ZombieRoolLauncher(QMainWindow):
     def __init__(self):
@@ -213,6 +539,11 @@ class ZombieRoolLauncher(QMainWindow):
         self.tabs.addTab(self.download_tab, "Map Download")
         self.setup_download_tab()
         
+        # "Upload Map" tab - NEW TAB
+        self.upload_map_tab = QWidget()
+        self.tabs.addTab(self.upload_map_tab, "Upload Map")
+        self.setup_upload_map_tab()
+
         # "Settings" tab
         self.settings_tab = QWidget()
         self.tabs.addTab(self.settings_tab, "Settings")
@@ -270,7 +601,6 @@ class ZombieRoolLauncher(QMainWindow):
         self.update_launcher_button.clicked.connect(self.update_launcher)
         self.update_launcher_button.setEnabled(False) # Disabled by default
         layout.addWidget(self.update_launcher_button)
-
         layout.addStretch() # Pushes elements to the top
 
     def setup_download_tab(self):
@@ -282,10 +612,306 @@ class ZombieRoolLauncher(QMainWindow):
         maps_label.setStyleSheet("font-size: 18px; font-weight: bold; margin-top: 10px; color: #2C3E50;")
         layout.addWidget(maps_label)
 
-        self.maps_container_layout = QVBoxLayout() # Container to dynamically add maps
-        layout.addLayout(self.maps_container_layout)
+        # Search Bar for Maps
+        self.map_search_input = QLineEdit()
+        self.map_search_input.setPlaceholderText("Search maps by name or description...")
+        self.map_search_input.textChanged.connect(self._filter_maps_display)
+        layout.addWidget(self.map_search_input)
+
+        # Scroll Area for Maps
+        self.maps_scroll_area = QScrollArea()
+        self.maps_scroll_area.setWidgetResizable(True)
+        self.maps_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff) # Disable horizontal scrollbar
+
+        self.maps_container_widget = QWidget()
+        self.maps_container_layout = QVBoxLayout(self.maps_container_widget)
+        self.maps_container_layout.setAlignment(Qt.AlignmentFlag.AlignTop) # Align content to top
+
+        self.maps_scroll_area.setWidget(self.maps_container_widget)
+        layout.addWidget(self.maps_scroll_area)
+
+        # Refresh button for maps catalog
+        self.refresh_maps_button = QPushButton("Refresh Map Catalog")
+        self.refresh_maps_button.setStyleSheet("background-color: #5DADE2; color: white; border-radius: 5px; padding: 10px;")
+        self.refresh_maps_button.clicked.connect(lambda: self.check_for_updates(cache_bust=True))
+        layout.addWidget(self.refresh_maps_button)
 
         layout.addStretch()
+
+    def setup_upload_map_tab(self):
+        """Configures the 'Upload Map' tab interface."""
+        layout = QVBoxLayout(self.upload_map_tab)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        # --- Publish Map Section ---
+        upload_label = QLabel("Publish Map to GitHub", self)
+        upload_label.setStyleSheet("font-size: 18px; font-weight: bold; margin-top: 10px; color: #2C3E50;")
+        layout.addWidget(upload_label)
+
+        # GitHub Token Input
+        token_layout = QHBoxLayout()
+        token_layout.addWidget(QLabel("GitHub Personal Access Token:"))
+        self.github_token_input = QLineEdit()
+        self.github_token_input.setEchoMode(QLineEdit.EchoMode.Password) # Hide token input
+        self.github_token_input.setPlaceholderText("Enter your GitHub token (not saved!)")
+        token_layout.addWidget(self.github_token_input)
+        layout.addLayout(token_layout)
+
+        layout.addSpacing(10)
+
+        # Map ID Input
+        map_id_layout = QHBoxLayout()
+        map_id_layout.addWidget(QLabel("Map ID (unique, e.g., 'winter'):"))
+        self.upload_map_id_input = QLineEdit()
+        self.upload_map_id_input.setPlaceholderText("Enter a unique ID for the map (e.g., 'my-awesome-map')")
+        map_id_layout.addWidget(self.upload_map_id_input)
+        layout.addLayout(map_id_layout)
+
+        # Map Name Input
+        map_name_layout = QHBoxLayout()
+        map_name_layout.addWidget(QLabel("Map Name (displayed):"))
+        self.upload_map_name_input = QLineEdit()
+        self.upload_map_name_input.setPlaceholderText("Enter the map's display name (e.g., 'The Asylum Map')")
+        map_name_layout.addWidget(self.upload_map_name_input)
+        layout.addLayout(map_name_layout)
+
+        # Map Version Input
+        map_version_layout = QHBoxLayout()
+        map_version_layout.addWidget(QLabel("Map Version:"))
+        self.upload_map_version_input = QLineEdit()
+        self.upload_map_version_input.setPlaceholderText("Enter the map's version (e.g., '1.0.0')")
+        map_version_layout.addWidget(self.upload_map_version_input)
+        layout.addLayout(map_version_layout)
+
+        # Map Description Input
+        map_description_layout = QVBoxLayout()
+        map_description_layout.addWidget(QLabel("Map Description:"))
+        self.upload_map_description_input = QTextEdit()
+        self.upload_map_description_input.setPlaceholderText("Enter a brief description for the map.")
+        self.upload_map_description_input.setFixedSize(self.width() - 80, 80) # Fixed size for description
+        map_description_layout.addWidget(self.upload_map_description_input)
+        layout.addLayout(map_description_layout)
+
+        layout.addSpacing(10)
+
+        # Map File Selection
+        map_file_layout = QHBoxLayout()
+        map_file_layout.addWidget(QLabel("Select Map ZIP file:"))
+        self.upload_map_file_path = QLineEdit()
+        self.upload_map_file_path.setReadOnly(True)
+        map_file_layout.addWidget(self.upload_map_file_path)
+        self.browse_map_file_button = QPushButton("Browse...")
+        self.browse_map_file_button.clicked.connect(self.select_map_zip_file)
+        map_file_layout.addWidget(self.browse_map_file_button)
+        layout.addLayout(map_file_layout)
+
+        # Resource Pack Checkbox
+        self.has_rp_checkbox = QCheckBox("Associated Resource Pack?")
+        self.has_rp_checkbox.stateChanged.connect(self._toggle_rp_selection)
+        layout.addWidget(self.has_rp_checkbox)
+
+        # Resource Pack File Selection (initially hidden)
+        self.rp_file_layout = QHBoxLayout()
+        self.rp_file_layout.addWidget(QLabel("Select Resource Pack ZIP file:"))
+        self.upload_rp_file_path = QLineEdit()
+        self.upload_rp_file_path.setReadOnly(True)
+        self.rp_file_layout.addWidget(self.upload_rp_file_path)
+        self.browse_rp_file_button = QPushButton("Browse...")
+        self.browse_rp_file_button.clicked.connect(self.select_rp_zip_file)
+        self.rp_file_layout.addWidget(self.browse_rp_file_button)
+        
+        # Add layout, but hide it initially
+        layout.addLayout(self.rp_file_layout)
+        self._toggle_rp_selection() # Initial state set
+
+        layout.addSpacing(20)
+
+        # Upload Button
+        self.publish_map_button = QPushButton("Publish Map to GitHub")
+        self.publish_map_button.clicked.connect(self.publish_map_to_github)
+        self.publish_map_button.setStyleSheet("background-color: #3498DB; color: white; border-radius: 5px; padding: 10px;")
+        layout.addWidget(self.publish_map_button)
+
+        # Status Label for Upload Tab
+        self.upload_status_label = QLabel("", self)
+        self.upload_status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.upload_status_label)
+
+        layout.addStretch() # Push publish section to top
+
+        # --- Delete Map Section ---
+        layout.addSpacing(30)
+        delete_label = QLabel("Delete Map from GitHub", self)
+        delete_label.setStyleSheet("font-size: 18px; font-weight: bold; margin-top: 10px; color: #E74C3C;")
+        layout.addWidget(delete_label)
+
+        delete_map_id_layout = QHBoxLayout()
+        delete_map_id_layout.addWidget(QLabel("Map ID to Delete:"))
+        self.delete_map_id_input = QLineEdit()
+        self.delete_map_id_input.setPlaceholderText("Enter the ID of the map to delete (e.g., 'old-map-id')")
+        delete_map_id_layout.addWidget(self.delete_map_id_input)
+        layout.addLayout(delete_map_id_layout)
+
+        self.delete_map_button = QPushButton("Delete Map from Catalog")
+        self.delete_map_button.clicked.connect(self.delete_selected_map)
+        self.delete_map_button.setStyleSheet("background-color: #C0392B; color: white; border-radius: 5px; padding: 10px;")
+        layout.addWidget(self.delete_map_button)
+
+        self.delete_status_label = QLabel("", self)
+        self.delete_status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.delete_status_label)
+        
+        layout.addStretch() # Push delete section to top as well within its own stretch
+
+    def _toggle_rp_selection(self):
+        """Toggles the visibility of the resource pack file selection based on checkbox state."""
+        is_checked = self.has_rp_checkbox.isChecked()
+        for i in range(self.rp_file_layout.count()):
+            widget_item = self.rp_file_layout.itemAt(i)
+            if widget_item.widget():
+                widget_item.widget().setVisible(is_checked)
+            elif widget_item.layout(): # Handle nested layouts if any
+                # For a QHBoxLayout, it seems setting visibility of widgets is enough,
+                # but if there were nested layouts, we'd enable/disable them.
+                # For simplicity here, just setting widget visibility should work.
+                pass 
+
+
+    def select_map_zip_file(self):
+        """Opens a file dialog to select the map ZIP file."""
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select Map ZIP File", "", "ZIP Files (*.zip)")
+        if file_path:
+            self.upload_map_file_path.setText(file_path)
+
+    def select_rp_zip_file(self):
+        """Opens a file dialog to select the resource pack ZIP file."""
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select Resource Pack ZIP File", "", "ZIP Files (*.zip)")
+        if file_path:
+            self.upload_rp_file_path.setText(file_path)
+
+    def publish_map_to_github(self):
+        """
+        Initiates the GitHub upload process for the map and associated resource pack.
+        """
+        github_token = self.github_token_input.text().strip()
+        map_id = self.upload_map_id_input.text().strip()
+        map_name = self.upload_map_name_input.text().strip()
+        map_version = self.upload_map_version_input.text().strip()
+        map_description = self.upload_map_description_input.toPlainText().strip()
+        map_zip_path = self.upload_map_file_path.text().strip()
+        has_rp = self.has_rp_checkbox.isChecked()
+        rp_zip_path = self.upload_rp_file_path.text().strip() if has_rp else ""
+
+        # Basic validation
+        if not github_token:
+            QMessageBox.warning(self, "Missing Information", "Please enter your GitHub Personal Access Token.")
+            self.upload_status_label.setText("Publication failed: Missing GitHub token.")
+            return
+        if not map_id or not map_name or not map_version or not map_zip_path:
+            QMessageBox.warning(self, "Missing Information", "Please fill in Map ID, Map Name, Map Version, and select the Map ZIP file.")
+            self.upload_status_label.setText("Publication failed: Missing map information.")
+            return
+        if not os.path.exists(map_zip_path):
+            QMessageBox.warning(self, "File Not Found", f"Map ZIP file not found at: {map_zip_path}")
+            self.upload_status_label.setText("Publication failed: Map ZIP not found.")
+            return
+        if has_rp and (not rp_zip_path or not os.path.exists(rp_zip_path)):
+            QMessageBox.warning(self, "Missing Resource Pack File", "You checked 'Associated Resource Pack' but did not select a valid RP ZIP file or it does not exist.")
+            self.upload_status_label.setText("Publication failed: RP ZIP not found.")
+            return
+
+        # Disable button during upload
+        self.publish_map_button.setEnabled(False)
+        self.upload_status_label.setText("Initiating GitHub upload...")
+
+        map_info = {
+            "id": map_id,
+            "name": map_name,
+            "latest_version": map_version,
+            "description": map_description
+        }
+
+        # Start GitHub upload in a separate thread
+        self.uploader_thread = GitHubUploaderThread(github_token, map_info, map_zip_path, rp_zip_path)
+        self.uploader_thread.upload_progress.connect(self.upload_status_label.setText)
+        self.uploader_thread.upload_finished.connect(self._handle_upload_finished)
+        self.uploader_thread.upload_error.connect(self._handle_upload_error)
+        self.uploader_thread.start()
+
+    def _handle_upload_finished(self, map_info):
+        """Handles successful map upload."""
+        self.publish_map_button.setEnabled(True)
+        self.upload_status_label.setText("Publication complete! Check GitHub.")
+        QMessageBox.information(self, "Publication Success", 
+                                f"Map '{map_info['name']}' (v{map_info['latest_version']}) has been successfully published to GitHub and updates.json has been updated!")
+        
+        # Clear fields after successful upload, but keep token for convenience
+        self.upload_map_id_input.clear()
+        self.upload_map_name_input.clear()
+        self.upload_map_version_input.clear()
+        self.upload_map_description_input.clear()
+        self.upload_map_file_path.clear()
+        self.upload_rp_file_path.clear()
+        self.has_rp_checkbox.setChecked(False) # Resets checkbox and hides RP fields
+
+        # Force refresh of map list in download tab with cache bust
+        self.check_for_updates(cache_bust=True) 
+
+    def _handle_upload_error(self, message):
+        """Handles errors during map upload."""
+        self.publish_map_button.setEnabled(True)
+        self.upload_status_label.setText(f"Publication failed: {message}")
+        QMessageBox.critical(self, "Publication Error", message)
+
+    def delete_selected_map(self):
+        """
+        Initiates the GitHub deletion process for a map from the catalog.
+        """
+        github_token = self.github_token_input.text().strip()
+        map_id_to_delete = self.delete_map_id_input.text().strip()
+
+        if not github_token:
+            QMessageBox.warning(self, "Missing Information", "Please enter your GitHub Personal Access Token.")
+            self.delete_status_label.setText("Deletion failed: Missing GitHub token.")
+            return
+        if not map_id_to_delete:
+            QMessageBox.warning(self, "Missing Information", "Please enter the Map ID to delete.")
+            self.delete_status_label.setText("Deletion failed: Missing map ID.")
+            return
+
+        reply = QMessageBox.question(self, 'Confirm Deletion', 
+                                    f"Are you sure you want to delete ALL releases and the entry for map ID '{map_id_to_delete}' from GitHub?\nThis action cannot be undone!",
+                                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+
+        if reply == QMessageBox.StandardButton.No:
+            self.delete_status_label.setText("Deletion canceled.")
+            return
+
+        self.delete_map_button.setEnabled(False)
+        self.delete_status_label.setText(f"Initiating deletion for map ID '{map_id_to_delete}'...")
+
+        # Start GitHub deletion in a separate thread
+        self.deleter_thread = GitHubDeleterThread(github_token, map_id_to_delete)
+        self.deleter_thread.deletion_progress.connect(self.delete_status_label.setText)
+        self.deleter_thread.deletion_finished.connect(self._handle_deletion_finished)
+        self.deleter_thread.deletion_error.connect(self._handle_deletion_error)
+        self.deleter_thread.start()
+
+    def _handle_deletion_finished(self, map_id):
+        """Handles successful map deletion."""
+        self.delete_map_button.setEnabled(True)
+        self.delete_status_label.setText(f"Deletion complete for map ID '{map_id}'.")
+        QMessageBox.information(self, "Deletion Success", 
+                                f"Map ID '{map_id}' and its associated GitHub releases have been successfully deleted, and updates.json has been updated!")
+        self.delete_map_id_input.clear()
+        # Force refresh of map list in download tab with cache bust
+        self.check_for_updates(cache_bust=True) 
+
+    def _handle_deletion_error(self, message):
+        """Handles errors during map deletion."""
+        self.delete_map_button.setEnabled(True)
+        self.delete_status_label.setText(f"Deletion failed: {message}")
+        QMessageBox.critical(self, "Deletion Error", message)
 
     def setup_settings_tab(self):
         """Configures the 'Settings' tab interface."""
@@ -333,7 +959,7 @@ class ZombieRoolLauncher(QMainWindow):
             self.set_minecraft_path(saved_path, show_message=False) # Do not show message on startup
             if not self.minecraft_paths: # If the loaded path is no longer valid
                  QMessageBox.warning(self, "Invalid Minecraft Path",
-                                    "The saved Minecraft path is no longer valid or does not exist. Please reconfigure it in the 'Settings' tab.")
+                                    "The saved Minecraft path is no longer valid or does not exist. Please reconfigure it in 'Settings'.")
                  self.mc_path_input.setText("Path Not Configured")
                  self.mods_path_label.setText("Mods Folder: Not Configured")
                  self.saves_path_label.setText("Saves Folder: Not Configured")
@@ -341,7 +967,7 @@ class ZombieRoolLauncher(QMainWindow):
         else:
             # If no path is saved, display the initial invitation message
             QMessageBox.information(self, "Minecraft Path Configuration",
-                                    "Welcome! Please select your Minecraft instance folder (containing 'mods', 'saves', 'resourcepacks' folders) in the 'Settings' tab by clicking 'Browse...'.")
+                                    "Welcome! Please select your Minecraft instance folder (containing 'mods', 'saves', 'resourcepacks' folders) in 'Settings' by clicking 'Browse...'.")
             self.mc_path_input.setText("Path Not Configured")
             self.mods_path_label.setText("Mods Folder: Not Configured")
             self.saves_path_label.setText("Saves Folder: Not Configured")
@@ -399,7 +1025,7 @@ class ZombieRoolLauncher(QMainWindow):
                                     "The selected path does not appear to be a valid Minecraft instance (mods, saves, resourcepacks folders not found).")
 
     # --- Update Check and Processing Functions ---
-    def check_for_updates(self):
+    def check_for_updates(self, cache_bust=False):
         """
         Initiates the check for all updates by downloading updates.json
         from GitHub in a separate thread.
@@ -411,13 +1037,18 @@ class ZombieRoolLauncher(QMainWindow):
         # Disable buttons during check to prevent multiple clicks
         self.update_mod_button.setEnabled(False)
         self.update_launcher_button.setEnabled(False)
+        # Disable map management buttons during update check
+        self.publish_map_button.setEnabled(False)
+        self.delete_map_button.setEnabled(False)
+        self.refresh_maps_button.setEnabled(False) # Disable refresh button during check
+
 
         # Hide progress bars at the start of the check
         self.mod_progress_bar.hide()
         self.launcher_progress_bar.hide()
 
         # Create and start the update checker thread
-        self.update_checker_thread = UpdateCheckerThread(UPDATES_JSON_URL)
+        self.update_checker_thread = UpdateCheckerThread(UPDATES_JSON_URL, cache_bust=cache_bust)
         # Connect thread signals to slots (functions) in the main class
         self.update_checker_thread.update_data_ready.connect(self.process_remote_updates)
         self.update_checker_thread.error_occurred.connect(self.handle_update_error)
@@ -432,12 +1063,21 @@ class ZombieRoolLauncher(QMainWindow):
         
         if self.remote_updates_data:
             self.header_label.setText("ZombieRool Launcher - Updates Checked")
-            QMessageBox.information(self, "Updates", "Update information successfully retrieved from GitHub!")
+            # Only show this if it's not a background refresh (e.g., from upload/delete)
+            # This logic avoids redundant pop-ups during auto-refresh
+            if not self.sender() or (isinstance(self.sender(), QThread) and self.sender() not in [getattr(self, 'uploader_thread', None), getattr(self, 'deleter_thread', None)]):
+                QMessageBox.information(self, "Updates", "Update information successfully retrieved from GitHub!")
             
             # Call specific update logic functions
             self._check_launcher_update_logic()
             self._check_mod_update_logic()
-            self._load_maps_for_download_logic()
+            self._load_maps_for_download_logic() # This will now filter too
+            
+            # Re-enable map management buttons after update check
+            self.publish_map_button.setEnabled(True)
+            self.delete_map_button.setEnabled(True)
+            self.refresh_maps_button.setEnabled(True) # Re-enable refresh button
+
         else:
             # This case should normally not be reached if error_occurred is well handled,
             # but it is a safety measure.
@@ -446,6 +1086,9 @@ class ZombieRoolLauncher(QMainWindow):
             # Re-enable buttons even if there's an error if you want to allow another attempt
             self.update_mod_button.setEnabled(True)
             self.update_launcher_button.setEnabled(True)
+            self.publish_map_button.setEnabled(True)
+            self.delete_map_button.setEnabled(True)
+            self.refresh_maps_button.setEnabled(True) # Re-enable refresh button
 
 
     def handle_update_error(self, message):
@@ -457,6 +1100,10 @@ class ZombieRoolLauncher(QMainWindow):
         # Re-enable buttons in case of an error so the user can retry manually
         self.update_mod_button.setEnabled(True)
         self.update_launcher_button.setEnabled(True)
+        self.publish_map_button.setEnabled(True)
+        self.delete_map_button.setEnabled(True)
+        self.refresh_maps_button.setEnabled(True) # Re-enable refresh button
+
     
     # --- Launcher Update Logic (to be developed later) ---
     def _check_launcher_update_logic(self):
@@ -515,33 +1162,73 @@ class ZombieRoolLauncher(QMainWindow):
 
         self.launcher_downloader = FileDownloaderThread(download_url, temp_destination_path)
         self.launcher_downloader.download_progress.connect(self.launcher_progress_bar.setValue)
-        self.launcher_downloader.download_finished.connect(self._install_new_launcher)
+        # MODIFICATION: Changed to a more robust update installation method
+        self.launcher_downloader.download_finished.connect(
+            lambda: self._trigger_launcher_replacement(temp_destination_path)
+        )
         self.launcher_downloader.download_error.connect(self._handle_launcher_download_error)
         self.launcher_downloader.start()
 
-    def _install_new_launcher(self, temp_launcher_path):
+    def _trigger_launcher_replacement(self, new_launcher_path):
         """
-        After download, launches the new launcher and closes the old one.
+        Triggers the replacement of the old launcher with the new one using a helper script.
         """
         self.launcher_progress_bar.hide()
-        self.launcher_status_label.setText("Download complete. Launching update...")
-        QMessageBox.information(self, "Launcher Update", "New version downloaded. The launcher will restart.")
+        self.launcher_status_label.setText("Téléchargement terminé. Préparation à la mise à jour...")
+        QMessageBox.information(self, "Mise à jour Launcher", "Nouvelle version téléchargée. Le launcher va se relancer.")
+
+        current_launcher_path = os.path.abspath(sys.argv[0]) # Path to the currently running executable
+        temp_update_dir = os.path.dirname(new_launcher_path) # Directory where the new launcher was downloaded
+
+        # Define the helper script path
+        helper_script_name = "update_helper.bat" if platform.system() == "Windows" else "update_helper.sh"
+        helper_script_path = os.path.join(temp_update_dir, helper_script_name)
+
+        if platform.system() == "Windows":
+            helper_content = f"""
+@echo off
+timeout /t 2 /nobreak >nul
+rem Delete old launcher
+del "{current_launcher_path}" /f /q
+rem Move new launcher to old path
+move "{new_launcher_path}" "{current_launcher_path}" >nul
+rem Remove temporary update directory
+rmdir /s /q "{temp_update_dir}" >nul
+rem Launch the new launcher
+start "" "{current_launcher_path}"
+exit
+"""
+        else: # For macOS/Linux (simplified, may need more robust error handling/permissions)
+            helper_content = f"""
+#!/bin/bash
+sleep 2
+rm -f "{current_launcher_path}"
+mv "{new_launcher_path}" "{current_launcher_path}"
+rm -rf "{temp_update_dir}"
+chmod +x "{current_launcher_path}" # Ensure new launcher is executable
+"{current_launcher_path}" &
+exit
+"""
         
         try:
-            # Build command to launch the new launcher
-            # Use 'start' on Windows to launch the process and free the parent
-            if platform.system() == "Windows":
-                command = f'start "" "{temp_launcher_path}"'
-            else: # For macOS/Linux, may require execute permissions
-                os.chmod(temp_launcher_path, 0o755) # Make the file executable
-                command = f'"{temp_launcher_path}"'
+            with open(helper_script_path, 'w') as f:
+                f.write(helper_content)
             
-            os.system(command) # Execute the new launcher
-            QApplication.quit() # Close the current application
+            # Make the script executable on Unix-like systems
+            if platform.system() != "Windows":
+                os.chmod(helper_script_path, 0o755)
+
+            # Launch the helper script in a detached process
+            if platform.system() == "Windows":
+                subprocess.Popen([helper_script_path], creationflags=subprocess.DETACHED_PROCESS, close_fds=True)
+            else:
+                subprocess.Popen(['bash', helper_script_path], preexec_fn=os.setsid, close_fds=True)
+
+            QApplication.quit() # Close the current instance of the launcher
         except Exception as e:
-            QMessageBox.critical(self, "Launcher Update Error", f"Could not launch new launcher version: {e}. Please download the update manually.")
-            self.launcher_status_label.setText(f"Error launching update: {e}")
-            self.update_launcher_button.setEnabled(True) # Re-enable button on failure
+            QMessageBox.critical(self, "Erreur Mise à Jour Launcher", f"Impossible de lancer la procédure de mise à jour : {e}. Veuillez redémarrer le launcher manuellement.")
+            self.launcher_status_label.setText(f"Erreur lors du lancement de la mise à jour : {e}")
+            self.update_launcher_button.setEnabled(True) # Réactiver le bouton en cas d'échec
 
     def _handle_launcher_download_error(self, message):
         """Handles launcher download errors."""
@@ -566,10 +1253,10 @@ class ZombieRoolLauncher(QMainWindow):
         
         try:
             remote_version = QVersionNumber.fromString(remote_mod_version_str)
-            local_version = QVersionNumber.fromString(local_mod_version_str)
+            local_version = QVersionNumber.fromString(local_version_str)
 
             if remote_version > local_version:
-                self.mod_status_label.setText(f"Mod Status: New version {remote_mod_version_str} available! (Current: {local_mod_version_str})")
+                self.mod_status_label.setText(f"Mod Status: New version {remote_mod_version_str} available! (Current: {local_version_str})")
                 self.update_mod_button.setEnabled(True)
             else:
                 self.mod_status_label.setText(f"Mod Status: Up to date (v{local_version_str})")
@@ -675,7 +1362,7 @@ class ZombieRoolLauncher(QMainWindow):
     def _load_maps_for_download_logic(self):
         """
         Loads and displays maps available for download
-        from remote_updates_data.
+        from remote_updates_data, applying search filter if any.
         """
         # Clear existing map container before reloading
         while self.maps_container_layout.count():
@@ -688,8 +1375,33 @@ class ZombieRoolLauncher(QMainWindow):
             self.maps_container_layout.addWidget(map_status)
             return
 
+        search_query = self.map_search_input.text().lower()
+        
+        filtered_maps = []
         for map_info in self.remote_updates_data["maps"]:
-            self.add_map_to_download_list(map_info)
+            map_name = map_info.get('name', '').lower()
+            map_description = map_info.get('description', '').lower()
+            map_id = map_info.get('id', '').lower()
+
+            if (not search_query or 
+                search_query in map_name or 
+                search_query in map_description or
+                search_query in map_id):
+                filtered_maps.append(map_info)
+
+        if not filtered_maps:
+            no_results_label = QLabel("No maps found matching your search criteria.")
+            self.maps_container_layout.addWidget(no_results_label)
+        else:
+            for map_info in filtered_maps:
+                self.add_map_to_download_list(map_info)
+
+    def _filter_maps_display(self):
+        """
+        Triggered by search bar input. Reloads maps based on the current filter.
+        """
+        self._load_maps_for_download_logic()
+
 
     def add_map_to_download_list(self, map_info):
         """
@@ -754,7 +1466,7 @@ class ZombieRoolLauncher(QMainWindow):
         # Start map download
         self.map_downloader = FileDownloaderThread(map_download_url, temp_map_path)
         self.map_downloader.download_progress.connect(progress_bar.setValue)
-        # CORRECTION: Pass rp_filename explicitly to _install_map_files
+        # Pass rp_filename explicitly to _install_map_files
         self.map_downloader.download_finished.connect(
             lambda path=temp_map_path, rp_url=rp_download_url, rp_path=temp_rp_path, map_name=map_info['name'], pb=progress_bar, rp_file_name_val=rp_filename: 
             self._install_map_files(path, rp_url, rp_path, map_name, pb, rp_file_name_val)
@@ -762,7 +1474,6 @@ class ZombieRoolLauncher(QMainWindow):
         self.map_downloader.download_error.connect(lambda msg: self._handle_map_download_error(msg, progress_bar))
         self.map_downloader.start()
 
-    # CORRECTION: Added rp_filename_val as a parameter
     def _install_map_files(self, temp_map_path, rp_download_url, temp_rp_path, map_name, progress_bar, rp_filename_val):
         """
         Decompresses the map, downloads and decompresses the resource pack if present.
@@ -778,7 +1489,7 @@ class ZombieRoolLauncher(QMainWindow):
                 # Extract only the first root directory or all files
                 # We assume the zip contains a single root map folder
                 map_folder_name = os.path.commonprefix(zip_ref.namelist())
-                # CORRECTION: os.grav_path does not exist, use os.path.join
+                # Use os.path.join
                 zip_ref.extractall(saves_dir)
                 extracted_path = os.path.join(saves_dir, map_folder_name.split('/')[0]) # Get the name of the root folder
                 if os.path.exists(extracted_path) and os.path.basename(extracted_path) != map_name:
@@ -799,7 +1510,7 @@ class ZombieRoolLauncher(QMainWindow):
                 self.rp_downloader = FileDownloaderThread(rp_download_url, temp_rp_path)
                 self.rp_downloader.download_progress.connect(progress_bar.setValue)
                 self.rp_downloader.download_finished.connect(
-                    # CORRECTION: Use rp_filename_val here
+                    # Use rp_filename_val here
                     lambda path=temp_rp_path, rp_name_for_install=rp_filename_val: self._install_resource_pack_from_temp(path, rp_name_for_install, progress_bar)
                 )
                 self.rp_downloader.download_error.connect(lambda msg: self._handle_map_download_error(msg, progress_bar, is_rp=True))
@@ -874,4 +1585,3 @@ if __name__ == "__main__":
     
     # Start the application event loop. The program remains active as long as this loop runs.
     sys.exit(app.exec())
-
