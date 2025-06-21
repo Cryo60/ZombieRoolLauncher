@@ -25,6 +25,13 @@
             "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/map-winter-v1.0.0/zr_winter.zip",
             "description": "",
             "resourcepack_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/map-winter-v1.0.0/Blut.und.Schnee.zip"
+        },
+        {
+            "id": "fnaf",
+            "name": "Five Night at Freddy's",
+            "latest_version": "1.0.0",
+            "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/map-fnaf-v1.0.0/zr_fnaf.zip",
+            "description": ""
         }
     ]
 }
