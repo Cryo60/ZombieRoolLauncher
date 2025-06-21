@@ -1,21 +1,21 @@
 {
   "launcher": {
     "latest_version": "1.0.0",
-    "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/launcher-v1.0.0/YourLauncherName_v1.0.0.exe"
+    "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/launcher-v1.0.0/ZombieRoolLauncher_v1.0.0.exe"
   },
   "mod": {
     "name": "ZombieRool",
-    "latest_version": "1.3.0",
-    "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/mod-v0.9.0/CoD_Zombie_Mod_v0.9.0.jar",
-    "changelog_url": "https://github.com/ton_pseudo/ton_repo/releases/tag/mod-v0.9.0"
+    "latest_version": "1.4.0",
+    "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/mod-v1.3.0/ZombieRool_v1.3.0.jar",
+    "changelog_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/tag/mod-v1.3.0"
   },
   "maps": [
     {
       "id": "asylum",
       "name": "The Asylum Map",
       "latest_version": "1.0.0",
-      "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/map-thebunker-v1.0.0/The_Bunker_Map_v1.0.0.zip",
-      "resourcepack_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/rp-thebunker-v1.0.0/The_Bunker_RP_v1.0.0.zip",
+      "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/map-asylum-v1.0.0/The_Asylum_Map_v1.0.0.zip",
+      "resourcepack_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/rp-asylum-v1.0.0/The_Asylum_RP_v1.0.0.zip",
       "description": "Inspiré de Verruckt"
     }
   ]
