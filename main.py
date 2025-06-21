@@ -778,9 +778,9 @@ class ZombieRoolLauncher(QMainWindow):
                 # Extraire uniquement le premier répertoire racine ou tous les fichiers
                 # On suppose que le zip contient un seul dossier racine de map
                 map_folder_name = os.path.commonprefix(zip_ref.namelist())
+                # CORRECTION: os.grav_path n'existe pas, il faut utiliser os.path.join
                 zip_ref.extractall(saves_dir)
-                # Renommer le dossier si nécessaire pour correspondre à map_name (facultatif mais propre)
-                extracted_path = os.grav_path.join(saves_dir, map_folder_name.split('/')[0]) # Prends le nom du dossier racine
+                extracted_path = os.path.join(saves_dir, map_folder_name.split('/')[0]) # Prends le nom du dossier racine
                 if os.path.exists(extracted_path) and os.path.basename(extracted_path) != map_name:
                     # Ne pas renommer s'il y a un conflit, juste informer
                     if not os.path.exists(os.path.join(saves_dir, map_name)):
