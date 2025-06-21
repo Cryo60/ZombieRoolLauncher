@@ -11,7 +11,7 @@ import time # For pausing in the update script
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout,
     QHBoxLayout, QPushButton, QLabel, QTabWidget,
-    QProgressBar, QMessageBox, QFileDialog, QLineEdit, QTextEdit, QCheckBox, QScrollArea # Import QScrollArea
+    QProgressBar, QMessageBox, QFileDialog, QLineEdit, QTextEdit, QCheckBox, QScrollArea, QComboBox # Import QComboBox
 )
 from PyQt6.QtCore import Qt, QUrl, QThread, pyqtSignal, QVersionNumber
 from PyQt6.QtGui import QDesktopServices # For opening external links
@@ -27,7 +27,7 @@ except ImportError:
 # --- GLOBAL CONFIGURATION ---
 # Current version of your launcher. This version will be compared by the launcher
 # with the one on GitHub to know if it needs to update itself.
-__version__ = "2.1.0" 
+__version__ = "3.0.0" 
 
 # Direct URL to the updates.json file on your GitHub repository.
 # IMPORTANT: Go to your updates.json file on GitHub, click on "Raw",
@@ -156,21 +156,35 @@ class UpdateCheckerThread(QThread):
             if self.cache_bust:
                 # Add a unique timestamp to the URL to bypass caching
                 fetch_url = f"{self.url}?_={int(time.time() * 1000)}"
-                print(f"Fetching updates.json with cache bust: {fetch_url}") # For debug/visibility
+                print(f"DEBUG: Fetching updates.json with cache bust: {fetch_url}") # For debug/visibility
 
             response = requests.get(fetch_url, timeout=10) # Timeout to prevent too long a block
             response.raise_for_status() # Raises an exception for HTTP error codes (4xx or 5xx)
             self.update_data = response.json() # Parses the JSON response
+            
+            # Debugging: Print information about the received data
+            print(f"DEBUG: UpdateCheckerThread received data. Maps count: {len(self.update_data.get('maps', []))}")
+            if self.update_data.get('maps'):
+                # Print ID and name of the first map to confirm data structure
+                if len(self.update_data['maps']) > 0:
+                    print(f"DEBUG: First map entry received: ID='{self.update_data['maps'][0].get('id')}', Name='{self.update_data['maps'][0].get('name')}'")
+                else:
+                    print(f"DEBUG: No maps found in updates.json (empty 'maps' array).")
+
+
             self.update_data_ready.emit() # Emits the success signal
         except requests.exceptions.RequestException as e:
             # Handles connection, DNS, timeout errors, etc.
             self.error_occurred.emit(f"Connection error while fetching updates: {e}")
+            print(f"DEBUG: UpdateCheckerThread connection error: {e}")
         except json.JSONDecodeError as e:
             # Handles errors if the downloaded content is not valid JSON
             self.error_occurred.emit(f"Error reading updates.json file (invalid JSON): {e}. Check the file format on GitHub.")
+            print(f"DEBUG: UpdateCheckerThread JSON decode error: {e}")
         except Exception as e:
             # Handles any other unexpected exception
             self.error_occurred.emit(f"An unexpected error occurred: {e}")
+            print(f"DEBUG: UpdateCheckerThread unexpected error: {e}")
 
 # --- THREAD FOR FILE DOWNLOAD WITH PROGRESS ---
 class FileDownloaderThread(QThread):
@@ -501,6 +515,521 @@ class GitHubDeleterThread(QThread):
 class ZombieRoolLauncher(QMainWindow):
     def __init__(self):
         super().__init__()
+
+        # --- Language and Theme Dictionaries ---
+        self.translations = {
+            "Welcome to the ZombieRool Launcher!": {
+                "en": "Welcome to the ZombieRool Launcher!",
+                "fr": "Bienvenue sur le Lanceur ZombieRool !"
+            },
+            "Launcher Version:": {
+                "en": "Launcher Version:",
+                "fr": "Version du Lanceur :"
+            },
+            "Update": {"en": "Update", "fr": "Mise à Jour"},
+            "Map Download": {"en": "Map Download", "fr": "Télécharger Cartes"},
+            "Upload Map": {"en": "Upload Map", "fr": "Publier Carte"},
+            "Settings": {"en": "Settings", "fr": "Paramètres"},
+            "ZombieRool Mod Updates": {
+                "en": "ZombieRool Mod Updates",
+                "fr": "Mises à jour du Mod ZombieRool"
+            },
+            "Mod Status: Checking...": {
+                "en": "Mod Status: Checking...",
+                "fr": "Statut du Mod : Vérification..."
+            },
+            "Update Mod": {"en": "Update Mod", "fr": "Mettre à Jour le Mod"},
+            "Launcher Updates": {
+                "en": "Launcher Updates",
+                "fr": "Mises à jour du Lanceur"
+            },
+            "Launcher Status: Checking...": {
+                "en": "Launcher Status: Checking...",
+                "fr": "Statut du Lanceur : Vérification..."
+            },
+            "Update Launcher": {
+                "en": "Update Launcher",
+                "fr": "Mettre à Jour le Lanceur"
+            },
+            "Download and Install Maps": {
+                "en": "Download and Install Maps",
+                "fr": "Télécharger et Installer des Cartes"
+            },
+            "Search maps by name or description...": {
+                "en": "Search maps by name or description...",
+                "fr": "Rechercher des cartes par nom ou description..."
+            },
+            "Refresh Map Catalog": {
+                "en": "Refresh Map Catalog",
+                "fr": "Actualiser le Catalogue de Cartes"
+            },
+            "Publish Map to GitHub": {
+                "en": "Publish Map to GitHub",
+                "fr": "Publier une Carte sur GitHub"
+            },
+            "GitHub Personal Access Token:": {
+                "en": "GitHub Personal Access Token:",
+                "fr": "Jeton d'Accès Personnel GitHub :"
+            },
+            "Enter your GitHub token (not saved!)": {
+                "en": "Enter your GitHub token (not saved!)",
+                "fr": "Entrez votre jeton GitHub (non sauvegardé !)"
+            },
+            "Map ID (unique, e.g., 'winter'):": {
+                "en": "Map ID (unique, e.g., 'winter'):",
+                "fr": "ID de la Carte (unique, ex: 'winter') :"
+            },
+            "Enter a unique ID for the map (e.g., 'my-awesome-map')": {
+                "en": "Enter a unique ID for the map (e.g., 'my-awesome-map')",
+                "fr": "Entrez un ID unique pour la carte (ex: 'ma-super-carte')"
+            },
+            "Map Name (displayed):": {
+                "en": "Map Name (displayed):",
+                "fr": "Nom de la Carte (affiché) :"
+            },
+            "Enter the map's display name (e.g., 'The Asylum Map')": {
+                "en": "Enter the map's display name (e.g., 'The Asylum Map')",
+                "fr": "Entrez le nom d'affichage de la carte (ex: 'La Carte de l'Asile')"
+            },
+            "Map Version:": {"en": "Map Version:", "fr": "Version de la Carte :"},
+            "Enter the map's version (e.g., '1.0.0')": {
+                "en": "Enter the map's version (e.g., '1.0.0')",
+                "fr": "Entrez la version de la carte (ex: '1.0.0')"
+            },
+            "Map Description:": {"en": "Map Description:", "fr": "Description de la Carte :"},
+            "Enter a brief description for the map.": {
+                "en": "Enter a brief description for the map.",
+                "fr": "Entrez une brève description de la carte."
+            },
+            "Select Map ZIP file:": {
+                "en": "Select Map ZIP file:",
+                "fr": "Sélectionner le fichier ZIP de la Carte :"
+            },
+            "Browse...": {"en": "Browse...", "fr": "Parcourir..."},
+            "Associated Resource Pack?": {
+                "en": "Associated Resource Pack?",
+                "fr": "Pack de Ressources Associé ?"
+            },
+            "Select Resource Pack ZIP file:": {
+                "en": "Select Resource Pack ZIP file:",
+                "fr": "Sélectionner le fichier ZIP du Pack de Ressources :"
+            },
+            "Publish Map to GitHub": {
+                "en": "Publish Map to GitHub",
+                "fr": "Publier la Carte sur GitHub"
+            },
+            "Delete Map from GitHub": {
+                "en": "Delete Map from GitHub",
+                "fr": "Supprimer la Carte de GitHub"
+            },
+            "Map ID to Delete:": {
+                "en": "Map ID to Delete:",
+                "fr": "ID de la Carte à Supprimer :"
+            },
+            "Enter the ID of the map to delete (e.g., 'old-map-id')": {
+                "en": "Enter the ID of the map to delete (e.g., 'old-map-id')",
+                "fr": "Entrez l'ID de la carte à supprimer (ex: 'ancienne-carte-id')"
+            },
+            "Delete Map from Catalog": {
+                "en": "Delete Map from Catalog",
+                "fr": "Supprimer la Carte du Catalogue"
+            },
+            "Minecraft Settings and Paths": {
+                "en": "Minecraft Settings and Paths",
+                "fr": "Paramètres et Chemins Minecraft"
+            },
+            " .minecraft or Instance Folder :": {
+                "en": " .minecraft or Instance Folder :",
+                "fr": " Dossier .minecraft ou d'Instance :"
+            },
+            "Click 'Browse...' to choose your Minecraft folder": {
+                "en": "Click 'Browse...' to choose your Minecraft folder",
+                "fr": "Cliquez sur 'Parcourir...' pour choisir votre dossier Minecraft"
+            },
+            "Mods Folder: Not Detected": {
+                "en": "Mods Folder: Not Detected",
+                "fr": "Dossier Mods : Non Détecté"
+            },
+            "Saves Folder: Not Detected": {
+                "en": "Saves Folder: Not Detected",
+                "fr": "Dossier Sauvegardes : Non Détecté"
+            },
+            "Resourcepacks Folder: Not Detected": {
+                "en": "Resourcepacks Folder: Not Detected",
+                "fr": "Dossier Packs de Ressources : Non Détecté"
+            },
+            "Path Not Configured": {
+                "en": "Path Not Configured",
+                "fr": "Chemin Non Configuré"
+            },
+            "Mods Folder: Not Configured": {
+                "en": "Mods Folder: Not Configured",
+                "fr": "Dossier Mods : Non Configuré"
+            },
+            "Saves Folder: Not Configured": {
+                "en": "Saves Folder: Not Configured",
+                "fr": "Dossier Sauvegardes : Non Configuré"
+            },
+            "Resourcepacks Folder: Not Configured": {
+                "en": "Resourcepacks Folder: Not Configured",
+                "fr": "Dossier Packs de Ressources : Non Configuré"
+            },
+            "Minecraft Path Configuration": {
+                "en": "Minecraft Path Configuration",
+                "fr": "Configuration du Chemin Minecraft"
+            },
+            "Welcome! Please select your Minecraft instance folder (containing 'mods', 'saves', 'resourcepacks' folders) in 'Settings' by clicking 'Browse...'.": {
+                "en": "Welcome! Please select your Minecraft instance folder (containing 'mods', 'saves', 'resourcepacks' folders) in 'Settings' by clicking 'Browse...'.",
+                "fr": "Bienvenue ! Veuillez sélectionner votre dossier d'instance Minecraft (contenant les dossiers 'mods', 'saves', 'resourcepacks') dans 'Paramètres' en cliquant sur 'Parcourir...'."
+            },
+            "Selection Canceled": {"en": "Selection Canceled", "fr": "Sélection Annulée"},
+            "Minecraft Path Configured": {
+                "en": "Minecraft Path Configured",
+                "fr": "Chemin Minecraft Configuré"
+            },
+            "The Minecraft folder has been manually configured:": {
+                "en": "The Minecraft folder has been manually configured:",
+                "fr": "Le dossier Minecraft a été configuré manuellement :"
+            },
+            "Invalid Path": {"en": "Invalid Path", "fr": "Chemin Invalide"},
+            "The selected path does not appear to be a valid Minecraft instance (mods, saves, resourcepacks folders not found).": {
+                "en": "The selected path does not appear to be a valid Minecraft instance (mods, saves, resourcepacks folders not found).",
+                "fr": "Le chemin sélectionné ne semble pas être une instance Minecraft valide (dossiers mods, saves, resourcepacks introuvables)."
+            },
+            "Checking for updates...": {
+                "en": "Checking for updates...",
+                "fr": "Vérification des mises à jour..."
+            },
+            "ZombieRool Launcher - Updates Checked": {
+                "en": "ZombieRool Launcher - Updates Checked",
+                "fr": "Lanceur ZombieRool - Mises à jour Vérifiées"
+            },
+            "Updates": {"en": "Updates", "fr": "Mises à jour"},
+            "Update information successfully retrieved from GitHub!": {
+                "en": "Update information successfully retrieved from GitHub!",
+                "fr": "Informations de mise à jour récupérées avec succès depuis GitHub !"
+            },
+            "Error": {"en": "Error", "fr": "Erreur"},
+            "Could not retrieve update information. Check the updates.json file URL or JSON structure.": {
+                "en": "Could not retrieve update information. Check the updates.json file URL or JSON structure.",
+                "fr": "Impossible de récupérer les informations de mise à jour. Vérifiez l'URL ou la structure JSON du fichier updates.json."
+            },
+            "ZombieRool Launcher - Update Error": {
+                "en": "ZombieRool Launcher - Update Error",
+                "fr": "Lanceur ZombieRool - Erreur de Mise à Jour"
+            },
+            "Update Error": {"en": "Update Error", "fr": "Erreur de Mise à Jour"},
+            "An error occurred while checking for updates:": {
+                "en": "An error occurred while checking for updates:",
+                "fr": "Une erreur est survenue lors de la vérification des mises à jour :"
+            },
+            "Mod Status: Remote info not found.": {
+                "en": "Mod Status: Remote info not found.",
+                "fr": "Statut du Mod : Informations distantes introuvables."
+            },
+            "Mod Status: New version {remote_version_str} available! (Current: {local_version_str})": {
+                "en": "Mod Status: New version {remote_version_str} available! (Current: {local_version_str})",
+                "fr": "Statut du Mod : Nouvelle version {remote_version_str} disponible ! (Actuelle : {local_version_str})"
+            },
+            "Mod Status: Up to date (v{local_version_str})": {
+                "en": "Mod Status: Up to date (v{local_version_str})",
+                "fr": "Statut du Mod : À jour (v{local_version_str})"
+            },
+            "Mod Status: Version error ({e})": {
+                "en": "Mod Status: Version error ({e})",
+                "fr": "Statut du Mod : Erreur de version ({e})"
+            },
+            "Launcher Update": {"en": "Launcher Update", "fr": "Mise à Jour du Lanceur"},
+            "Launcher update information not found.": {
+                "en": "Launcher update information not found.",
+                "fr": "Informations de mise à jour du lanceur introuvables."
+            },
+            "Launcher download URL not found in update data.": {
+                "en": "Launcher download URL not found in update data.",
+                "fr": "URL de téléchargement du lanceur introuvable dans les données de mise à jour."
+            },
+            "Downloading new launcher version ({launcher_info_latest_version})...": {
+                "en": "Downloading new launcher version ({launcher_info_latest_version})...",
+                "fr": "Téléchargement de la nouvelle version du lanceur ({launcher_info_latest_version})..."
+            },
+            "Downloading...": {"en": "Downloading...", "fr": "Téléchargement en cours..."},
+            "Téléchargement terminé. Préparation à la mise à jour...": {
+                "en": "Download complete. Preparing for update...",
+                "fr": "Téléchargement terminé. Préparation à la mise à jour..."
+            },
+            "Nouvelle version téléchargée. Le launcher va se relancer.": {
+                "en": "New version downloaded. The launcher will restart.",
+                "fr": "Nouvelle version téléchargée. Le lanceur va se relancer."
+            },
+            "Erreur Mise à Jour Launcher": {
+                "en": "Launcher Update Error",
+                "fr": "Erreur Mise à Jour Lanceur"
+            },
+            "Impossible de lancer la procédure de mise à jour : {e}. Veuillez redémarrer le launcher manuellement.": {
+                "en": "Could not start update procedure: {e}. Please restart the launcher manually.",
+                "fr": "Impossible de lancer la procédure de mise à jour : {e}. Veuillez redémarrer le lanceur manuellement."
+            },
+            "Erreur lors du lancement de la mise à jour : {e}": {
+                "en": "Error launching update: {e}",
+                "fr": "Erreur lors du lancement de la mise à jour : {e}"
+            },
+            "Launcher Download Error": {
+                "en": "Launcher Download Error",
+                "fr": "Erreur de Téléchargement du Lanceur"
+            },
+            "Download failed: {message}": {
+                "en": "Download failed: {message}",
+                "fr": "Échec du téléchargement : {message}"
+            },
+            "Installation Error": {"en": "Installation Error", "fr": "Erreur d'Installation"},
+            "The Minecraft 'mods' folder is not configured. Please define it in 'Settings'.": {
+                "en": "The Minecraft 'mods' folder is not configured. Please define it in 'Settings'.",
+                "fr": "Le dossier 'mods' de Minecraft n'est pas configuré. Veuillez le définir dans 'Paramètres'."
+            },
+            "Mod Update": {"en": "Mod Update", "fr": "Mise à Jour du Mod"},
+            "Mod download URL not found in update data.": {
+                "en": "Mod download URL not found in update data.",
+                "fr": "URL de téléchargement du mod introuvable dans les données de mise à jour."
+            },
+            "Downloading mod ({mod_info_latest_version})...": {
+                "en": "Downloading mod ({mod_info_latest_version})...",
+                "fr": "Téléchargement du mod ({mod_info_latest_version})..."
+            },
+            "Downloading mod...": {"en": "Downloading mod...", "fr": "Téléchargement du mod..."},
+            "Installing mod...": {"en": "Installing mod...", "fr": "Installation du mod..."},
+            "Mod updated and installed successfully!": {
+                "en": "Mod updated and installed successfully!",
+                "fr": "Mod mis à jour et installé avec succès !"
+            },
+            "Mod Installation Error": {
+                "en": "Mod Installation Error",
+                "fr": "Erreur d'Installation du Mod"
+            },
+            "An error occurred during mod installation: {e}": {
+                "en": "An error occurred during mod installation: {e}",
+                "fr": "Une erreur est survenue lors de l'installation du mod : {e}"
+            },
+            "Installation failed: {e}": {
+                "en": "Installation failed: {e}",
+                "fr": "Échec de l'installation : {e}"
+            },
+            "Mod Download Error": {
+                "en": "Mod Download Error",
+                "fr": "Erreur de Téléchargement du Mod"
+            },
+            "No map information available.": {
+                "en": "No map information available.",
+                "fr": "Aucune information de carte disponible."
+            },
+            "No maps found matching your search criteria.": {
+                "en": "No maps found matching your search criteria.",
+                "fr": "Aucune carte trouvée correspondant à vos critères de recherche."
+            },
+            "Install Map": {"en": "Install Map", "fr": "Installer Carte"},
+            "Minecraft 'saves' or 'resourcepacks' folders are not configured. Please define them in 'Settings'.": {
+                "en": "Minecraft 'saves' or 'resourcepacks' folders are not configured. Please define them in 'Settings'.",
+                "fr": "Les dossiers 'saves' ou 'resourcepacks' de Minecraft ne sont pas configurés. Veuillez les définir dans 'Paramètres'."
+            },
+            "Map Installation": {"en": "Map Installation", "fr": "Installation de Carte"},
+            "Map download URL not found.": {
+                "en": "Map download URL not found.",
+                "fr": "URL de téléchargement de la carte introuvable."
+            },
+            "Downloading map '{map_info_name}'...": {
+                "en": "Downloading map '{map_info_name}'...",
+                "fr": "Téléchargement de la carte '{map_info_name}'..."
+            },
+            "Map '{map_name}' downloaded. Installing...": {
+                "en": "Map '{map_name}' downloaded. Installing...",
+                "fr": "Carte '{map_name}' téléchargée. Installation..."
+            },
+            "Decompression Error": {"en": "Decompression Error", "fr": "Erreur de Décompression"},
+            "The map ZIP file is corrupted or invalid. The 'zipfile' module only supports ZIP format (not RAR).": {
+                "en": "The map ZIP file is corrupted or invalid. The 'zipfile' module only supports ZIP format (not RAR).",
+                "fr": "Le fichier ZIP de la carte est corrompu ou invalide. Le module 'zipfile' ne prend en charge que le format ZIP (pas RAR)."
+            },
+            "Map Installation Error": {
+                "en": "Map Installation Error",
+                "fr": "Erreur d'Installation de la Carte"
+            },
+            "An error occurred during map installation: {e}": {
+                "en": "An error occurred during map installation: {e}",
+                "fr": "Une erreur est survenue lors de l'installation de la carte : {e}"
+            },
+            "Resource Pack Installation": {
+                "en": "Resource Pack Installation",
+                "fr": "Installation du Pack de Ressources"
+            },
+            "Downloading associated resource pack...": {
+                "en": "Downloading associated resource pack...",
+                "fr": "Téléchargement du pack de ressources associé..."
+            },
+            "Resource pack downloaded. Installing...": {
+                "en": "Resource pack downloaded. Installing...",
+                "fr": "Pack de ressources téléchargé. Installation..."
+            },
+            "Resource Pack installed successfully! Map and Resource Pack are ready.": {
+                "en": "Resource Pack installed successfully! Map and Resource Pack are ready.",
+                "fr": "Pack de ressources installé avec succès ! La carte et le pack de ressources sont prêts."
+            },
+            "RP Installation Error": {
+                "en": "RP Installation Error",
+                "fr": "Erreur d'Installation du Pack de Ressources"
+            },
+            "An error occurred during resource pack installation: {e}": {
+                "en": "An error occurred during resource pack installation: {e}",
+                "fr": "Une erreur est survenue lors de l'installation du pack de ressources : {e}"
+            },
+            "Installation Complete": {"en": "Installation Complete", "fr": "Installation Terminée"},
+            "Map '{map_name}' installed successfully! (No associated Resource Pack)": {
+                "en": "Map '{map_name}' installed successfully! (No associated Resource Pack)",
+                "fr": "Carte '{map_name}' installée avec succès ! (Pas de Pack de Ressources associé)"
+            },
+            "Resource Pack Download Error": {
+                "en": "Resource Pack Download Error",
+                "fr": "Erreur de Téléchargement du Pack de Ressources"
+            },
+            "Confirm Deletion": {"en": "Confirm Deletion", "fr": "Confirmer la Suppression"},
+            "Are you sure you want to delete ALL releases and the entry for map ID '{map_id_to_delete}' from GitHub?\nThis action cannot be undone!": {
+                "en": "Are you sure you want to delete ALL releases and the entry for map ID '{map_id_to_delete}' from GitHub?\nThis action cannot be undone!",
+                "fr": "Êtes-vous sûr de vouloir supprimer TOUTES les versions et l'entrée de la carte ID '{map_id_to_delete}' de GitHub ?\nCette action est irréversible !"
+            },
+            "Deletion canceled.": {"en": "Deletion canceled.", "fr": "Suppression annulée."},
+            "Initiating deletion for map ID '{map_id_to_delete}'...": {
+                "en": "Initiating deletion for map ID '{map_id_to_delete}'...",
+                "fr": "Initialisation de la suppression pour la carte ID '{map_id_to_delete}'..."
+            },
+            "Deletion complete for map ID '{map_id}'.": {
+                "en": "Deletion complete for map ID '{map_id}'.",
+                "fr": "Suppression terminée pour la carte ID '{map_id}'."
+            },
+            "Deletion Success": {"en": "Deletion Success", "fr": "Suppression Réussie"},
+            "Map ID '{map_id}' and its associated GitHub releases have been successfully deleted, and updates.json has been updated!": {
+                "en": "Map ID '{map_id}' and its associated GitHub releases have been successfully deleted, and updates.json has been updated!",
+                "fr": "La carte ID '{map_id}' et ses versions GitHub associées ont été supprimées avec succès, et updates.json a été mis à jour !"
+            },
+            "Deletion Error": {"en": "Deletion Error", "fr": "Erreur de Suppression"},
+            "Échec de l'opération GitHub lors de la suppression : {message}. Veuillez vous assurer que votre Personal Access Token GitHub dispose des permissions suffisantes (par exemple, le scope 'repo' complet ou spécifiquement 'contents:write', 'releases:write', 'delete_repo' pour ce dépôt, et 'write:discussion' si vous avez l'option).": {
+                "en": "GitHub operation failed during deletion: {message}. Please ensure your GitHub Personal Access Token has sufficient permissions (e.g., full 'repo' scope or specifically 'contents:write', 'releases:write', 'delete_repo' for this repository, and 'write:discussion' if you have the option).",
+                "fr": "Échec de l'opération GitHub lors de la suppression : {message}. Veuillez vous assurer que votre Jeton d'Accès Personnel GitHub dispose des permissions suffisantes (par exemple, le scope 'repo' complet ou spécifiquement 'contents:write', 'releases:write', 'delete_repo' pour ce dépôt, et 'write:discussion' si vous avez l'option)."
+            },
+            "Une erreur inattendue est survenue lors de la suppression : {e}": {
+                "en": "An unexpected error occurred during deletion: {e}",
+                "fr": "Une erreur inattendue est survenue lors de la suppression : {e}"
+            },
+            "Missing Information": {"en": "Missing Information", "fr": "Informations Manquantes"},
+            "Please enter your GitHub Personal Access Token.": {
+                "en": "Please enter your GitHub Personal Access Token.",
+                "fr": "Veuillez entrer votre Jeton d'Accès Personnel GitHub."
+            },
+            "Publication failed: Missing GitHub token.": {
+                "en": "Publication failed: Missing GitHub token.",
+                "fr": "Publication échouée : Jeton GitHub manquant."
+            },
+            "Please fill in Map ID, Map Name, Map Version, and select the Map ZIP file.": {
+                "en": "Please fill in Map ID, Map Name, Map Version, and select the Map ZIP file.",
+                "fr": "Veuillez remplir l'ID de la carte, le Nom de la carte, la Version de la carte et sélectionner le fichier ZIP de la carte."
+            },
+            "Publication failed: Missing map information.": {
+                "en": "Publication failed: Missing map information.",
+                "fr": "Publication échouée : Informations de carte manquantes."
+            },
+            "File Not Found": {"en": "File Not Found", "fr": "Fichier Introuvable"},
+            "Map ZIP file not found at: {map_zip_path}": {
+                "en": "Map ZIP file not found at: {map_zip_path}",
+                "fr": "Fichier ZIP de la carte introuvable à : {map_zip_path}"
+            },
+            "Publication failed: Map ZIP not found.": {
+                "en": "Publication failed: Map ZIP not found.",
+                "fr": "Publication échouée : ZIP de la carte introuvable."
+            },
+            "Missing Resource Pack File": {
+                "en": "Missing Resource Pack File",
+                "fr": "Fichier de Pack de Ressources Manquant"
+            },
+            "You checked 'Associated Resource Pack' but did not select a valid RP ZIP file or it does not exist.": {
+                "en": "You checked 'Associated Resource Pack' but did not select a valid RP ZIP file or it does not exist.",
+                "fr": "Vous avez coché 'Pack de Ressources Associé' mais n'avez pas sélectionné de fichier ZIP de pack de ressources valide ou il n'existe pas."
+            },
+            "Publication failed: RP ZIP not found.": {
+                "en": "Publication failed: RP ZIP not found.",
+                "fr": "Publication échouée : ZIP du pack de ressources introuvable."
+            },
+            "Initiating GitHub upload...": {
+                "en": "Initiating GitHub upload...",
+                "fr": "Initialisation de l'envoi sur GitHub..."
+            },
+            "Publication complete! Check GitHub.": {
+                "en": "Publication complete! Check GitHub.",
+                "fr": "Publication terminée ! Vérifiez GitHub."
+            },
+            "Publication Success": {"en": "Publication Success", "fr": "Publication Réussie"},
+            "Map '{map_info_name}' (v{map_info_latest_version}) has been successfully published to GitHub and updates.json has been updated!": {
+                "en": "Map '{map_info_name}' (v{map_info_latest_version}) has been successfully published to GitHub and updates.json has been updated!",
+                "fr": "La carte '{map_info_name}' (v{map_info_latest_version}) a été publiée avec succès sur GitHub et updates.json a été mis à jour !"
+            },
+            "Publication Error": {"en": "Publication Error", "fr": "Erreur de Publication"},
+            "Publication failed: {message}": {
+                "en": "Publication failed: {message}",
+                "fr": "Publication échouée : {message}"
+            },
+            "Please enter the Map ID to delete.": {
+                "en": "Please enter the Map ID to delete.",
+                "fr": "Veuillez entrer l'ID de la carte à supprimer."
+            },
+            "Deletion failed: Missing map ID.": {
+                "en": "Deletion failed: Missing map ID.",
+                "fr": "Suppression échouée : ID de carte manquant."
+            },
+            "Select Language:": {"en": "Select Language:", "fr": "Sélectionner la Langue :"},
+            "Select Theme:": {"en": "Select Theme:", "fr": "Sélectionner le Thème :"},
+            "Default Theme": {"en": "Default Theme", "fr": "Thème par Défaut"},
+            "Dark Theme": {"en": "Dark Theme", "fr": "Thème Sombre"},
+        }
+
+        self.current_language = "en" # Default language
+        self.current_theme = "Default" # Default theme
+
+        self.themes = {
+            "Default": {
+                "main_window": "QMainWindow { background-color: #ECF0F1; }",
+                "tabs": "QTabWidget::pane { border: 1px solid #CCC; background: #EEE; }"
+                        "QTabBar::tab { background: #DDD; border: 1px solid #CCC; border-bottom-color: #EEE; "
+                        "border-top-left-radius: 4px; border-top-right-radius: 4px; padding: 8px 15px; }"
+                        "QTabBar::tab:selected { background: #FFF; border-color: #999; border-bottom-color: #FFF; }"
+                        "QTabWidget::tab-bar { alignment: center; }",
+                "header_label": "font-size: 24px; font-weight: bold; padding: 20px; color: #E74C3C;",
+                "section_label": "font-size: 18px; font-weight: bold; margin-top: 10px; color: #2C3E50;",
+                "status_bar": "font-size: 10px; padding: 5px; color: #555;",
+                "map_widget": "background-color: #F8F8F8; border: 1px solid #DDD; border-radius: 5px; padding: 10px; margin-bottom: 5px;",
+                "download_button": "background-color: #2ECC71; color: white; border-radius: 5px; padding: 5px;",
+                "publish_button": "background-color: #3498DB; color: white; border-radius: 5px; padding: 10px;",
+                "delete_button": "background-color: #C0392B; color: white; border-radius: 5px; padding: 10px;",
+                "refresh_button": "background-color: #5DADE2; color: white; border-radius: 5px; padding: 10px;",
+                "label_text_color": "color: #333;" # General text color for labels
+            },
+            "Dark": {
+                "main_window": "QMainWindow { background-color: #2C3E50; color: #ECF0F1; }",
+                "tabs": "QTabWidget::pane { border: 1px solid #555; background: #34495E; }"
+                        "QTabBar::tab { background: #4F627A; border: 1px solid #555; border-bottom-color: #34495E; "
+                        "border-top-left-radius: 4px; border-top-right-radius: 4px; padding: 8px 15px; color: #ECF0F1; }"
+                        "QTabBar::tab:selected { background: #2C3E50; border-color: #777; border-bottom-color: #2C3E50; color: #ECF0F1; }"
+                        "QTabWidget::tab-bar { alignment: center; }",
+                "header_label": "font-size: 24px; font-weight: bold; padding: 20px; color: #E74C3C;", # Red stays
+                "section_label": "font-size: 18px; font-weight: bold; margin-top: 10px; color: #ECF0F1;",
+                "status_bar": "font-size: 10px; padding: 5px; color: #BDC3C7;",
+                "map_widget": "background-color: #34495E; border: 1px solid #555; border-radius: 5px; padding: 10px; margin-bottom: 5px; color: #ECF0F1;",
+                "download_button": "background-color: #27AE60; color: white; border-radius: 5px; padding: 5px;",
+                "publish_button": "background-color: #2980B9; color: white; border-radius: 5px; padding: 10px;",
+                "delete_button": "background-color: #A03422; color: white; border-radius: 5px; padding: 10px;",
+                "refresh_button": "background-color: #4A90D9; color: white; border-radius: 5px; padding: 10px;",
+                "label_text_color": "color: #ECF0F1;" # General text color for labels
+            }
+        }
+        
+        # Mapping of widget attributes to their text keys for dynamic language updates
+        self.translatable_widgets = {}
+
         # Main window initialization
         self.setWindowTitle(f"ZombieRool Launcher - v{__version__}")
         self.setGeometry(100, 100, 800, 600) # x, y, width, height
@@ -515,49 +1044,176 @@ class ZombieRoolLauncher(QMainWindow):
         self.remote_updates_data = None 
 
         # --- Launcher Header ---
-        self.header_label = QLabel("Welcome to the ZombieRool Launcher!", self)
+        self.header_label = QLabel("", self) # Text will be set by set_language
         self.header_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.header_label.setStyleSheet("font-size: 24px; font-weight: bold; padding: 20px; color: #E74C3C;") # Basic style for a "gamer" look
         self.main_layout.addWidget(self.header_label)
+        self.translatable_widgets[self.header_label] = "Welcome to the ZombieRool Launcher!"
 
         # --- Tabs ---
         self.tabs = QTabWidget()
-        self.tabs.setStyleSheet("QTabWidget::pane { border: 1px solid #CCC; background: #EEE; }"
-                                "QTabBar::tab { background: #DDD; border: 1px solid #CCC; border-bottom-color: #EEE; "
-                                "border-top-left-radius: 4px; border-top-right-radius: 4px; padding: 8px 15px; }"
-                                "QTabBar::tab:selected { background: #FFF; border-color: #999; border-bottom-color: #FFF; }"
-                                "QTabWidget::tab-bar { alignment: center; }") # Style for tabs
         self.main_layout.addWidget(self.tabs)
 
         # "Update" tab
         self.update_tab = QWidget()
-        self.tabs.addTab(self.update_tab, "Update")
+        self.tabs.addTab(self.update_tab, "") # Text will be set by set_language
+        self.translatable_widgets[self.tabs] = {0: "Update"} # Special handling for tab titles
         self.setup_update_tab()
 
         # "Map Download" tab
         self.download_tab = QWidget()
-        self.tabs.addTab(self.download_tab, "Map Download")
+        self.tabs.addTab(self.download_tab, "") # Text will be set by set_language
+        self.translatable_widgets[self.tabs][1] = "Map Download"
         self.setup_download_tab()
         
         # "Upload Map" tab - NEW TAB
         self.upload_map_tab = QWidget()
-        self.tabs.addTab(self.upload_map_tab, "Upload Map")
+        self.tabs.addTab(self.upload_map_tab, "") # Text will be set by set_language
+        self.translatable_widgets[self.tabs][2] = "Upload Map"
         self.setup_upload_map_tab()
 
         # "Settings" tab
         self.settings_tab = QWidget()
-        self.tabs.addTab(self.settings_tab, "Settings")
+        self.tabs.addTab(self.settings_tab, "") # Text will be set by set_language
+        self.translatable_widgets[self.tabs][3] = "Settings"
         self.setup_settings_tab()
 
         # --- Footer (Status Bar / Launcher Version) ---
-        self.status_bar = QLabel(f"Launcher Version: {__version__}", self)
+        self.status_bar = QLabel(f"", self) # Text will be set by set_language
         self.status_bar.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self.status_bar.setStyleSheet("font-size: 10px; padding: 5px; color: #555;")
         self.main_layout.addWidget(self.status_bar)
+        self.translatable_widgets[self.status_bar] = "Launcher Version:"
 
         # --- Initialization and startup checks ---
+        self.load_settings() # Load saved language and theme first
         self.load_saved_minecraft_path() # Attempts to load the saved Minecraft path
         self.check_for_updates() # Starts checking for updates from GitHub
+
+        # Apply initial language and theme based on loaded settings
+        self.apply_language(self.current_language)
+        self.apply_theme(self.current_theme)
+
+
+    def _(self, key, *args, **kwargs):
+        """Helper to get translated text with optional formatting."""
+        translation_dict = self.translations.get(key, {})
+        text = translation_dict.get(self.current_language, key) # Fallback to key if no translation
+        
+        # Format string if args/kwargs are provided
+        if args or kwargs:
+            try:
+                # Handle special case for launcher_info['latest_version'] and mod_info['latest_version']
+                # Passed as launcher_info_latest_version=... or mod_info_latest_version=...
+                # Rename these keys to 'latest_version' for formatting
+                if 'launcher_info_latest_version' in kwargs:
+                    kwargs['latest_version'] = kwargs.pop('launcher_info_latest_version')
+                if 'mod_info_latest_version' in kwargs:
+                    kwargs['latest_version'] = kwargs.pop('mod_info_latest_version')
+                if 'map_info_name' in kwargs:
+                    kwargs['map_info_name_val'] = kwargs.pop('map_info_name')
+                if 'map_info_latest_version' in kwargs:
+                    kwargs['map_info_latest_version_val'] = kwargs.pop('map_info_latest_version')
+
+                text = text.format(*args, **kwargs)
+            except KeyError as e:
+                print(f"Translation formatting error: Missing key {e} in string '{text}' for language '{self.current_language}'")
+            except IndexError as e:
+                print(f"Translation formatting error: Index error in string '{text}' for language '{self.current_language}' with args {args}")
+        return text
+
+    def apply_language(self, lang_code):
+        """Applies the selected language to all translatable UI elements."""
+        self.current_language = lang_code
+        # Update main window title
+        self.setWindowTitle(f"{self._('ZombieRool Launcher - v')}{__version__}") # Special handling for title
+
+        # Update all tracked widgets
+        for widget, text_key in self.translatable_widgets.items():
+            if isinstance(widget, QTabWidget):
+                # Special handling for tab titles
+                for index, tab_key in text_key.items():
+                    widget.setTabText(index, self._(tab_key))
+            elif isinstance(widget, QLabel):
+                if text_key == "Launcher Version:": # Special case for status bar
+                    widget.setText(f"{self._(text_key)} {__version__}")
+                else:
+                    widget.setText(self._(text_key))
+            elif isinstance(widget, QPushButton):
+                widget.setText(self._(text_key))
+            elif isinstance(widget, QLineEdit) and hasattr(widget, 'placeholderText'):
+                # Handle placeholder text if the widget stores its key in translatable_widgets
+                # For QLineEdit placeholder, we need to know its original translation key
+                # This requires a more complex mapping or direct update
+                pass # Placeholders are handled separately in setup functions as they are fixed
+        
+        # Re-apply placeholder texts as they are not directly in translatable_widgets
+        self.map_search_input.setPlaceholderText(self._("Search maps by name or description..."))
+        self.github_token_input.setPlaceholderText(self._("Enter your GitHub token (not saved!)"))
+        self.upload_map_id_input.setPlaceholderText(self._("Enter a unique ID for the map (e.g., 'my-awesome-map')"))
+        self.upload_map_name_input.setPlaceholderText(self._("Enter the map's display name (e.g., 'The Asylum Map')"))
+        self.upload_map_version_input.setPlaceholderText(self._("Enter the map's version (e.g., '1.0.0')"))
+        self.upload_map_description_input.setPlaceholderText(self._("Enter a brief description for the map."))
+        self.mc_path_input.setPlaceholderText(self._("Click 'Browse...' to choose your Minecraft folder"))
+        self.delete_map_id_input.setPlaceholderText(self._("Enter the ID of the map to delete (e.g., 'old-map-id')"))
+
+        # Reload maps to show translated "Install Map" button if needed (or if filter changed text)
+        self._load_maps_for_download_logic()
+        
+        # Save the new language preference
+        config = load_config()
+        config['language'] = lang_code
+        save_config(config)
+
+    def apply_theme(self, theme_name):
+        """Applies the selected theme's stylesheets to UI elements."""
+        self.current_theme = theme_name
+        theme_styles = self.themes.get(theme_name, self.themes["Default"])
+
+        # Apply main window style
+        self.setStyleSheet(theme_styles["main_window"])
+
+        # Apply tab style
+        self.tabs.setStyleSheet(theme_styles["tabs"])
+
+        # Apply specific widget styles
+        self.header_label.setStyleSheet(theme_styles["header_label"])
+
+        # Apply to section labels
+        for label in [self.mod_section_label, self.launcher_section_label, 
+                      self.maps_label, self.upload_label, self.delete_label, self.settings_label]:
+            label.setStyleSheet(theme_styles["section_label"])
+            
+        self.status_bar.setStyleSheet(theme_styles["status_bar"])
+
+        # Apply to map widgets (requires re-creating them or iterating through existing)
+        # For simplicity, we'll just re-load maps which rebuilds the widgets with new style
+        self._load_maps_for_download_logic() # Rebuilds map widgets with current theme
+
+        # Apply to specific buttons
+        self.update_mod_button.setStyleSheet(theme_styles["download_button"]) # Reusing download button style for mod update
+        self.update_launcher_button.setStyleSheet(theme_styles["download_button"]) # Reusing download button style for launcher update
+        self.publish_map_button.setStyleSheet(theme_styles["publish_button"])
+        self.delete_map_button.setStyleSheet(theme_styles["delete_button"])
+        self.refresh_maps_button.setStyleSheet(theme_styles["refresh_button"])
+
+        # Update general label text color for dynamic labels (like status)
+        # This needs to be applied to labels not covered by specific styles
+        for label in [self.mod_status_label, self.launcher_status_label, 
+                      self.upload_status_label, self.delete_status_label,
+                      self.mc_path_label, self.mods_path_label, self.saves_path_label, 
+                      self.resourcepacks_path_label, self.language_label, self.theme_label]:
+            label.setStyleSheet(theme_styles["label_text_color"])
+
+        # Save the new theme preference
+        config = load_config()
+        config['theme'] = theme_name
+        save_config(config)
+
+    def load_settings(self):
+        """Loads saved language and theme from configuration."""
+        config = load_config()
+        self.current_language = config.get('language', 'en')
+        self.current_theme = config.get('theme', 'Default')
+
 
     # --- Tab Configuration ---
     def setup_update_tab(self):
@@ -566,41 +1222,45 @@ class ZombieRoolLauncher(QMainWindow):
         layout.setContentsMargins(20, 20, 20, 20) # Inner margins
 
         # Section for the Mod
-        mod_section_label = QLabel("ZombieRool Mod Updates", self)
-        mod_section_label.setStyleSheet("font-size: 18px; font-weight: bold; margin-top: 10px; color: #2C3E50;")
-        layout.addWidget(mod_section_label)
+        self.mod_section_label = QLabel("", self) # Text set by apply_language
+        layout.addWidget(self.mod_section_label)
+        self.translatable_widgets[self.mod_section_label] = "ZombieRool Mod Updates"
 
-        self.mod_status_label = QLabel("Mod Status: Checking...", self)
+        self.mod_status_label = QLabel("", self) # Text set by apply_language
         layout.addWidget(self.mod_status_label)
+        self.translatable_widgets[self.mod_status_label] = "Mod Status: Checking..."
 
         self.mod_progress_bar = QProgressBar(self)
         self.mod_progress_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.mod_progress_bar.hide() # Hidden by default
         layout.addWidget(self.mod_progress_bar)
 
-        self.update_mod_button = QPushButton("Update Mod", self)
+        self.update_mod_button = QPushButton("", self) # Text set by apply_language
         self.update_mod_button.clicked.connect(self.update_mod) 
         self.update_mod_button.setEnabled(False) # Disabled by default, enabled if update is available
         layout.addWidget(self.update_mod_button)
+        self.translatable_widgets[self.update_mod_button] = "Update Mod"
         layout.addSpacing(20) # Spacing
 
         # Section for the Launcher (for self-update)
-        launcher_section_label = QLabel("Launcher Updates", self)
-        launcher_section_label.setStyleSheet("font-size: 18px; font-weight: bold; margin-top: 20px; color: #2C3E50;")
-        layout.addWidget(launcher_section_label)
+        self.launcher_section_label = QLabel("", self) # Text set by apply_language
+        layout.addWidget(self.launcher_section_label)
+        self.translatable_widgets[self.launcher_section_label] = "Launcher Updates"
 
-        self.launcher_status_label = QLabel("Launcher Status: Checking...", self)
+        self.launcher_status_label = QLabel("", self) # Text set by apply_language
         layout.addWidget(self.launcher_status_label)
+        self.translatable_widgets[self.launcher_status_label] = "Launcher Status: Checking..."
         
         self.launcher_progress_bar = QProgressBar(self)
         self.launcher_progress_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.launcher_progress_bar.hide() # Hidden by default
         layout.addWidget(self.launcher_progress_bar)
 
-        self.update_launcher_button = QPushButton("Update Launcher", self)
+        self.update_launcher_button = QPushButton("", self) # Text set by apply_language
         self.update_launcher_button.clicked.connect(self.update_launcher)
         self.update_launcher_button.setEnabled(False) # Disabled by default
         layout.addWidget(self.update_launcher_button)
+        self.translatable_widgets[self.update_launcher_button] = "Update Launcher"
         layout.addStretch() # Pushes elements to the top
 
     def setup_download_tab(self):
@@ -608,13 +1268,13 @@ class ZombieRoolLauncher(QMainWindow):
         layout = QVBoxLayout(self.download_tab)
         layout.setContentsMargins(20, 20, 20, 20)
 
-        maps_label = QLabel("Download and Install Maps", self)
-        maps_label.setStyleSheet("font-size: 18px; font-weight: bold; margin-top: 10px; color: #2C3E50;")
-        layout.addWidget(maps_label)
+        self.maps_label = QLabel("", self) # Text set by apply_language
+        layout.addWidget(self.maps_label)
+        self.translatable_widgets[self.maps_label] = "Download and Install Maps"
 
         # Search Bar for Maps
         self.map_search_input = QLineEdit()
-        self.map_search_input.setPlaceholderText("Search maps by name or description...")
+        # Placeholder text set by apply_language initially
         self.map_search_input.textChanged.connect(self._filter_maps_display)
         layout.addWidget(self.map_search_input)
 
@@ -631,10 +1291,11 @@ class ZombieRoolLauncher(QMainWindow):
         layout.addWidget(self.maps_scroll_area)
 
         # Refresh button for maps catalog
-        self.refresh_maps_button = QPushButton("Refresh Map Catalog")
-        self.refresh_maps_button.setStyleSheet("background-color: #5DADE2; color: white; border-radius: 5px; padding: 10px;")
+        self.refresh_maps_button = QPushButton("") # Text set by apply_language
         self.refresh_maps_button.clicked.connect(lambda: self.check_for_updates(cache_bust=True))
         layout.addWidget(self.refresh_maps_button)
+        self.translatable_widgets[self.refresh_maps_button] = "Refresh Map Catalog"
+
 
         layout.addStretch()
 
@@ -644,16 +1305,20 @@ class ZombieRoolLauncher(QMainWindow):
         layout.setContentsMargins(20, 20, 20, 20)
 
         # --- Publish Map Section ---
-        upload_label = QLabel("Publish Map to GitHub", self)
-        upload_label.setStyleSheet("font-size: 18px; font-weight: bold; margin-top: 10px; color: #2C3E50;")
-        layout.addWidget(upload_label)
+        self.upload_label = QLabel("", self) # Text set by apply_language
+        layout.addWidget(self.upload_label)
+        self.translatable_widgets[self.upload_label] = "Publish Map to GitHub"
+
 
         # GitHub Token Input
         token_layout = QHBoxLayout()
-        token_layout.addWidget(QLabel("GitHub Personal Access Token:"))
+        token_label = QLabel("") # Text set by apply_language
+        token_layout.addWidget(token_label)
+        self.translatable_widgets[token_label] = "GitHub Personal Access Token:"
+
         self.github_token_input = QLineEdit()
         self.github_token_input.setEchoMode(QLineEdit.EchoMode.Password) # Hide token input
-        self.github_token_input.setPlaceholderText("Enter your GitHub token (not saved!)")
+        # Placeholder text set by apply_language initially
         token_layout.addWidget(self.github_token_input)
         layout.addLayout(token_layout)
 
@@ -661,33 +1326,45 @@ class ZombieRoolLauncher(QMainWindow):
 
         # Map ID Input
         map_id_layout = QHBoxLayout()
-        map_id_layout.addWidget(QLabel("Map ID (unique, e.g., 'winter'):"))
+        map_id_label = QLabel("") # Text set by apply_language
+        map_id_layout.addWidget(map_id_label)
+        self.translatable_widgets[map_id_label] = "Map ID (unique, e.g., 'winter'):"
+
         self.upload_map_id_input = QLineEdit()
-        self.upload_map_id_input.setPlaceholderText("Enter a unique ID for the map (e.g., 'my-awesome-map')")
+        # Placeholder text set by apply_language initially
         map_id_layout.addWidget(self.upload_map_id_input)
         layout.addLayout(map_id_layout)
 
         # Map Name Input
         map_name_layout = QHBoxLayout()
-        map_name_layout.addWidget(QLabel("Map Name (displayed):"))
+        map_name_label = QLabel("") # Text set by apply_language
+        map_name_layout.addWidget(map_name_label)
+        self.translatable_widgets[map_name_label] = "Map Name (displayed):"
+
         self.upload_map_name_input = QLineEdit()
-        self.upload_map_name_input.setPlaceholderText("Enter the map's display name (e.g., 'The Asylum Map')")
+        # Placeholder text set by apply_language initially
         map_name_layout.addWidget(self.upload_map_name_input)
         layout.addLayout(map_name_layout)
 
         # Map Version Input
         map_version_layout = QHBoxLayout()
-        map_version_layout.addWidget(QLabel("Map Version:"))
+        map_version_label = QLabel("") # Text set by apply_language
+        map_version_layout.addWidget(map_version_label)
+        self.translatable_widgets[map_version_label] = "Map Version:"
+
         self.upload_map_version_input = QLineEdit()
-        self.upload_map_version_input.setPlaceholderText("Enter the map's version (e.g., '1.0.0')")
+        # Placeholder text set by apply_language initially
         map_version_layout.addWidget(self.upload_map_version_input)
         layout.addLayout(map_version_layout)
 
         # Map Description Input
         map_description_layout = QVBoxLayout()
-        map_description_layout.addWidget(QLabel("Map Description:"))
+        map_description_label = QLabel("") # Text set by apply_language
+        map_description_layout.addWidget(map_description_label)
+        self.translatable_widgets[map_description_label] = "Map Description:"
+
         self.upload_map_description_input = QTextEdit()
-        self.upload_map_description_input.setPlaceholderText("Enter a brief description for the map.")
+        # Placeholder text set by apply_language initially
         self.upload_map_description_input.setFixedSize(self.width() - 80, 80) # Fixed size for description
         map_description_layout.addWidget(self.upload_map_description_input)
         layout.addLayout(map_description_layout)
@@ -696,29 +1373,40 @@ class ZombieRoolLauncher(QMainWindow):
 
         # Map File Selection
         map_file_layout = QHBoxLayout()
-        map_file_layout.addWidget(QLabel("Select Map ZIP file:"))
+        map_file_label = QLabel("") # Text set by apply_language
+        map_file_layout.addWidget(map_file_label)
+        self.translatable_widgets[map_file_label] = "Select Map ZIP file:"
+
         self.upload_map_file_path = QLineEdit()
         self.upload_map_file_path.setReadOnly(True)
         map_file_layout.addWidget(self.upload_map_file_path)
-        self.browse_map_file_button = QPushButton("Browse...")
+        
+        self.browse_map_file_button = QPushButton("") # Text set by apply_language
         self.browse_map_file_button.clicked.connect(self.select_map_zip_file)
         map_file_layout.addWidget(self.browse_map_file_button)
+        self.translatable_widgets[self.browse_map_file_button] = "Browse..."
         layout.addLayout(map_file_layout)
 
         # Resource Pack Checkbox
-        self.has_rp_checkbox = QCheckBox("Associated Resource Pack?")
+        self.has_rp_checkbox = QCheckBox("") # Text set by apply_language
         self.has_rp_checkbox.stateChanged.connect(self._toggle_rp_selection)
         layout.addWidget(self.has_rp_checkbox)
+        self.translatable_widgets[self.has_rp_checkbox] = "Associated Resource Pack?"
 
         # Resource Pack File Selection (initially hidden)
         self.rp_file_layout = QHBoxLayout()
-        self.rp_file_layout.addWidget(QLabel("Select Resource Pack ZIP file:"))
+        rp_file_label = QLabel("") # Text set by apply_language
+        self.rp_file_layout.addWidget(rp_file_label)
+        self.translatable_widgets[rp_file_label] = "Select Resource Pack ZIP file:"
+
         self.upload_rp_file_path = QLineEdit()
         self.upload_rp_file_path.setReadOnly(True)
         self.rp_file_layout.addWidget(self.upload_rp_file_path)
-        self.browse_rp_file_button = QPushButton("Browse...")
+        
+        self.browse_rp_file_button = QPushButton("") # Text set by apply_language
         self.browse_rp_file_button.clicked.connect(self.select_rp_zip_file)
         self.rp_file_layout.addWidget(self.browse_rp_file_button)
+        self.translatable_widgets[self.browse_rp_file_button] = "Browse..."
         
         # Add layout, but hide it initially
         layout.addLayout(self.rp_file_layout)
@@ -727,10 +1415,11 @@ class ZombieRoolLauncher(QMainWindow):
         layout.addSpacing(20)
 
         # Upload Button
-        self.publish_map_button = QPushButton("Publish Map to GitHub")
+        self.publish_map_button = QPushButton("") # Text set by apply_language
         self.publish_map_button.clicked.connect(self.publish_map_to_github)
-        self.publish_map_button.setStyleSheet("background-color: #3498DB; color: white; border-radius: 5px; padding: 10px;")
         layout.addWidget(self.publish_map_button)
+        self.translatable_widgets[self.publish_map_button] = "Publish Map to GitHub"
+
 
         # Status Label for Upload Tab
         self.upload_status_label = QLabel("", self)
@@ -741,21 +1430,25 @@ class ZombieRoolLauncher(QMainWindow):
 
         # --- Delete Map Section ---
         layout.addSpacing(30)
-        delete_label = QLabel("Delete Map from GitHub", self)
-        delete_label.setStyleSheet("font-size: 18px; font-weight: bold; margin-top: 10px; color: #E74C3C;")
-        layout.addWidget(delete_label)
+        self.delete_label = QLabel("", self) # Text set by apply_language
+        layout.addWidget(self.delete_label)
+        self.translatable_widgets[self.delete_label] = "Delete Map from GitHub"
 
         delete_map_id_layout = QHBoxLayout()
-        delete_map_id_layout.addWidget(QLabel("Map ID to Delete:"))
+        delete_map_id_label = QLabel("") # Text set by apply_language
+        delete_map_id_layout.addWidget(delete_map_id_label)
+        self.translatable_widgets[delete_map_id_label] = "Map ID to Delete:"
+
         self.delete_map_id_input = QLineEdit()
-        self.delete_map_id_input.setPlaceholderText("Enter the ID of the map to delete (e.g., 'old-map-id')")
+        # Placeholder text set by apply_language initially
         delete_map_id_layout.addWidget(self.delete_map_id_input)
         layout.addLayout(delete_map_id_layout)
 
-        self.delete_map_button = QPushButton("Delete Map from Catalog")
+        self.delete_map_button = QPushButton("") # Text set by apply_language
         self.delete_map_button.clicked.connect(self.delete_selected_map)
-        self.delete_map_button.setStyleSheet("background-color: #C0392B; color: white; border-radius: 5px; padding: 10px;")
         layout.addWidget(self.delete_map_button)
+        self.translatable_widgets[self.delete_map_button] = "Delete Map from Catalog"
+
 
         self.delete_status_label = QLabel("", self)
         self.delete_status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -779,13 +1472,13 @@ class ZombieRoolLauncher(QMainWindow):
 
     def select_map_zip_file(self):
         """Opens a file dialog to select the map ZIP file."""
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select Map ZIP File", "", "ZIP Files (*.zip)")
+        file_path, _ = QFileDialog.getOpenFileName(self, self._("Select Map ZIP File:"), "", self._("ZIP Files (*.zip)"))
         if file_path:
             self.upload_map_file_path.setText(file_path)
 
     def select_rp_zip_file(self):
         """Opens a file dialog to select the resource pack ZIP file."""
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select Resource Pack ZIP File", "", "ZIP Files (*.zip)")
+        file_path, _ = QFileDialog.getOpenFileName(self, self._("Select Resource Pack ZIP file:"), "", self._("ZIP Files (*.zip)"))
         if file_path:
             self.upload_rp_file_path.setText(file_path)
 
@@ -804,25 +1497,25 @@ class ZombieRoolLauncher(QMainWindow):
 
         # Basic validation
         if not github_token:
-            QMessageBox.warning(self, "Missing Information", "Please enter your GitHub Personal Access Token.")
-            self.upload_status_label.setText("Publication failed: Missing GitHub token.")
+            QMessageBox.warning(self, self._("Missing Information"), self._("Please enter your GitHub Personal Access Token."))
+            self.upload_status_label.setText(self._("Publication failed: Missing GitHub token."))
             return
         if not map_id or not map_name or not map_version or not map_zip_path:
-            QMessageBox.warning(self, "Missing Information", "Please fill in Map ID, Map Name, Map Version, and select the Map ZIP file.")
-            self.upload_status_label.setText("Publication failed: Missing map information.")
+            QMessageBox.warning(self, self._("Missing Information"), self._("Please fill in Map ID, Map Name, Map Version, and select the Map ZIP file."))
+            self.upload_status_label.setText(self._("Publication failed: Missing map information."))
             return
         if not os.path.exists(map_zip_path):
-            QMessageBox.warning(self, "File Not Found", f"Map ZIP file not found at: {map_zip_path}")
-            self.upload_status_label.setText("Publication failed: Map ZIP not found.")
+            QMessageBox.warning(self, self._("File Not Found"), self._("Map ZIP file not found at: {map_zip_path}").format(map_zip_path=map_zip_path))
+            self.upload_status_label.setText(self._("Publication failed: Map ZIP not found."))
             return
         if has_rp and (not rp_zip_path or not os.path.exists(rp_zip_path)):
-            QMessageBox.warning(self, "Missing Resource Pack File", "You checked 'Associated Resource Pack' but did not select a valid RP ZIP file or it does not exist.")
-            self.upload_status_label.setText("Publication failed: RP ZIP not found.")
+            QMessageBox.warning(self, self._("Missing Resource Pack File"), self._("You checked 'Associated Resource Pack' but did not select a valid RP ZIP file or it does not exist."))
+            self.upload_status_label.setText(self._("Publication failed: RP ZIP not found."))
             return
 
         # Disable button during upload
         self.publish_map_button.setEnabled(False)
-        self.upload_status_label.setText("Initiating GitHub upload...")
+        self.upload_status_label.setText(self._("Initiating GitHub upload..."))
 
         map_info = {
             "id": map_id,
@@ -841,9 +1534,9 @@ class ZombieRoolLauncher(QMainWindow):
     def _handle_upload_finished(self, map_info):
         """Handles successful map upload."""
         self.publish_map_button.setEnabled(True)
-        self.upload_status_label.setText("Publication complete! Check GitHub.")
-        QMessageBox.information(self, "Publication Success", 
-                                f"Map '{map_info['name']}' (v{map_info['latest_version']}) has been successfully published to GitHub and updates.json has been updated!")
+        self.upload_status_label.setText(self._("Publication complete! Check GitHub."))
+        QMessageBox.information(self, self._("Publication Success"), 
+                                self._("Map '{map_info_name}' (v{map_info_latest_version}) has been successfully published to GitHub and updates.json has been updated!").format(map_info_name=map_info['name'], map_info_latest_version=map_info['latest_version']))
         
         # Clear fields after successful upload, but keep token for convenience
         self.upload_map_id_input.clear()
@@ -860,8 +1553,8 @@ class ZombieRoolLauncher(QMainWindow):
     def _handle_upload_error(self, message):
         """Handles errors during map upload."""
         self.publish_map_button.setEnabled(True)
-        self.upload_status_label.setText(f"Publication failed: {message}")
-        QMessageBox.critical(self, "Publication Error", message)
+        self.upload_status_label.setText(self._("Publication failed: {message}").format(message=message))
+        QMessageBox.critical(self, self._("Publication Error"), message)
 
     def delete_selected_map(self):
         """
@@ -871,24 +1564,24 @@ class ZombieRoolLauncher(QMainWindow):
         map_id_to_delete = self.delete_map_id_input.text().strip()
 
         if not github_token:
-            QMessageBox.warning(self, "Missing Information", "Please enter your GitHub Personal Access Token.")
-            self.delete_status_label.setText("Deletion failed: Missing GitHub token.")
+            QMessageBox.warning(self, self._("Missing Information"), self._("Please enter your GitHub Personal Access Token."))
+            self.delete_status_label.setText(self._("Deletion failed: Missing GitHub token."))
             return
         if not map_id_to_delete:
-            QMessageBox.warning(self, "Missing Information", "Please enter the Map ID to delete.")
-            self.delete_status_label.setText("Deletion failed: Missing map ID.")
+            QMessageBox.warning(self, self._("Missing Information"), self._("Please enter the Map ID to delete."))
+            self.delete_status_label.setText(self._("Deletion failed: Missing map ID."))
             return
 
-        reply = QMessageBox.question(self, 'Confirm Deletion', 
-                                    f"Are you sure you want to delete ALL releases and the entry for map ID '{map_id_to_delete}' from GitHub?\nThis action cannot be undone!",
+        reply = QMessageBox.question(self, self._('Confirm Deletion'), 
+                                    self._("Are you sure you want to delete ALL releases and the entry for map ID '{map_id_to_delete}' from GitHub?\\nThis action cannot be undone!").format(map_id_to_delete=map_id_to_delete),
                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
 
         if reply == QMessageBox.StandardButton.No:
-            self.delete_status_label.setText("Deletion canceled.")
+            self.delete_status_label.setText(self._("Deletion canceled."))
             return
 
         self.delete_map_button.setEnabled(False)
-        self.delete_status_label.setText(f"Initiating deletion for map ID '{map_id_to_delete}'...")
+        self.delete_status_label.setText(self._("Initiating deletion for map ID '{map_id_to_delete}'...").format(map_id_to_delete=map_id_to_delete))
 
         # Start GitHub deletion in a separate thread
         self.deleter_thread = GitHubDeleterThread(github_token, map_id_to_delete)
@@ -900,9 +1593,9 @@ class ZombieRoolLauncher(QMainWindow):
     def _handle_deletion_finished(self, map_id):
         """Handles successful map deletion."""
         self.delete_map_button.setEnabled(True)
-        self.delete_status_label.setText(f"Deletion complete for map ID '{map_id}'.")
-        QMessageBox.information(self, "Deletion Success", 
-                                f"Map ID '{map_id}' and its associated GitHub releases have been successfully deleted, and updates.json has been updated!")
+        self.delete_status_label.setText(self._("Deletion complete for map ID '{map_id}'.").format(map_id=map_id))
+        QMessageBox.information(self, self._("Deletion Success"), 
+                                self._("Map ID '{map_id}' and its associated GitHub releases have been successfully deleted, and updates.json has been updated!").format(map_id=map_id))
         self.delete_map_id_input.clear()
         # Force refresh of map list in download tab with cache bust
         self.check_for_updates(cache_bust=True) 
@@ -910,42 +1603,84 @@ class ZombieRoolLauncher(QMainWindow):
     def _handle_deletion_error(self, message):
         """Handles errors during map deletion."""
         self.delete_map_button.setEnabled(True)
-        self.delete_status_label.setText(f"Deletion failed: {message}")
-        QMessageBox.critical(self, "Deletion Error", message)
+        self.delete_status_label.setText(self._("Deletion failed: {message}").format(message=message))
+        QMessageBox.critical(self, self._("Deletion Error"), message)
 
     def setup_settings_tab(self):
         """Configures the 'Settings' tab interface."""
         layout = QVBoxLayout(self.settings_tab)
         layout.setContentsMargins(20, 20, 20, 20)
 
-        settings_label = QLabel("Minecraft Settings and Paths", self)
-        settings_label.setStyleSheet("font-size: 18px; font-weight: bold; margin-top: 10px; color: #2C3E50;")
-        layout.addWidget(settings_label)
+        self.settings_label = QLabel("", self) # Text set by apply_language
+        layout.addWidget(self.settings_label)
+        self.translatable_widgets[self.settings_label] = "Minecraft Settings and Paths"
 
         # Section for the Minecraft instance path
         mc_path_h_layout = QHBoxLayout()
-        mc_path_label = QLabel(" .minecraft or Instance Folder :")
-        mc_path_h_layout.addWidget(mc_path_label)
+        self.mc_path_label = QLabel("", self) # Text set by apply_language
+        mc_path_h_layout.addWidget(self.mc_path_label)
+        self.translatable_widgets[self.mc_path_label] = " .minecraft or Instance Folder :"
         
         self.mc_path_input = QLineEdit()
-        self.mc_path_input.setPlaceholderText("Click 'Browse...' to choose your Minecraft folder")
+        # Placeholder text set by apply_language initially
         self.mc_path_input.setReadOnly(True) # Read-only, user uses the button
         mc_path_h_layout.addWidget(self.mc_path_input)
         
-        self.browse_mc_path_button = QPushButton("Browse...")
+        self.browse_mc_path_button = QPushButton("") # Text set by apply_language
         self.browse_mc_path_button.clicked.connect(self.browse_minecraft_path)
         mc_path_h_layout.addWidget(self.browse_mc_path_button)
+        self.translatable_widgets[self.browse_mc_path_button] = "Browse..."
         layout.addLayout(mc_path_h_layout)
 
-        self.mods_path_label = QLabel("Mods Folder: Not Detected")
-        self.saves_path_label = QLabel("Saves Folder: Not Detected")
-        self.resourcepacks_path_label = QLabel("Resourcepacks Folder: Not Detected")
+        self.mods_path_label = QLabel("", self) # Text set by apply_language
+        self.saves_path_label = QLabel("", self) # Text set by apply_language
+        self.resourcepacks_path_label = QLabel("", self) # Text set by apply_language
         
         layout.addWidget(self.mods_path_label)
         layout.addWidget(self.saves_path_label)
         layout.addWidget(self.resourcepacks_path_label)
+        self.translatable_widgets[self.mods_path_label] = "Mods Folder: Not Detected"
+        self.translatable_widgets[self.saves_path_label] = "Saves Folder: Not Detected"
+        self.translatable_widgets[self.resourcepacks_path_label] = "Resourcepacks Folder: Not Detected"
+
+        layout.addSpacing(20)
+
+        # Language Selection
+        language_layout = QHBoxLayout()
+        self.language_label = QLabel("", self) # Text set by apply_language
+        language_layout.addWidget(self.language_label)
+        self.translatable_widgets[self.language_label] = "Select Language:"
+
+        self.language_combo = QComboBox(self)
+        self.language_combo.addItem("English", "en")
+        self.language_combo.addItem("Français", "fr")
+        self.language_combo.currentIndexChanged.connect(self._on_language_changed)
+        language_layout.addWidget(self.language_combo)
+        layout.addLayout(language_layout)
+
+        # Theme Selection
+        theme_layout = QHBoxLayout()
+        self.theme_label = QLabel("", self) # Text set by apply_language
+        theme_layout.addWidget(self.theme_label)
+        self.translatable_widgets[self.theme_label] = "Select Theme:"
+
+        self.theme_combo = QComboBox(self)
+        self.theme_combo.addItem(self._("Default Theme"), "Default")
+        self.theme_combo.addItem(self._("Dark Theme"), "Dark")
+        self.theme_combo.currentIndexChanged.connect(self._on_theme_changed)
+        theme_layout.addWidget(self.theme_combo)
+        layout.addLayout(theme_layout)
 
         layout.addStretch()
+
+    def _on_language_changed(self, index):
+        lang_code = self.language_combo.itemData(index)
+        self.apply_language(lang_code)
+
+    def _on_theme_changed(self, index):
+        theme_name = self.theme_combo.itemData(index)
+        self.apply_theme(theme_name)
+
 
     # --- Minecraft Path Logic Functions ---
     def load_saved_minecraft_path(self):
@@ -958,20 +1693,20 @@ class ZombieRoolLauncher(QMainWindow):
         if saved_path:
             self.set_minecraft_path(saved_path, show_message=False) # Do not show message on startup
             if not self.minecraft_paths: # If the loaded path is no longer valid
-                 QMessageBox.warning(self, "Invalid Minecraft Path",
-                                    "The saved Minecraft path is no longer valid or does not exist. Please reconfigure it in 'Settings'.")
-                 self.mc_path_input.setText("Path Not Configured")
-                 self.mods_path_label.setText("Mods Folder: Not Configured")
-                 self.saves_path_label.setText("Saves Folder: Not Configured")
-                 self.resourcepacks_path_label.setText("Resourcepacks Folder: Not Configured")
+                 QMessageBox.warning(self, self._("Invalid Minecraft Path"),
+                                    self._("The saved Minecraft path is no longer valid or does not exist. Please reconfigure it in 'Settings'."))
+                 self.mc_path_input.setText(self._("Path Not Configured"))
+                 self.mods_path_label.setText(self._("Mods Folder: Not Configured"))
+                 self.saves_path_label.setText(self._("Saves Folder: Not Configured"))
+                 self.resourcepacks_path_label.setText(self._("Resourcepacks Folder: Not Configured"))
         else:
             # If no path is saved, display the initial invitation message
-            QMessageBox.information(self, "Minecraft Path Configuration",
-                                    "Welcome! Please select your Minecraft instance folder (containing 'mods', 'saves', 'resourcepacks' folders) in 'Settings' by clicking 'Browse...'.")
-            self.mc_path_input.setText("Path Not Configured")
-            self.mods_path_label.setText("Mods Folder: Not Configured")
-            self.saves_path_label.setText("Saves Folder: Not Configured")
-            self.resourcepacks_path_label.setText("Resourcepacks Folder: Not Configured")
+            QMessageBox.information(self, self._("Minecraft Path Configuration"),
+                                    self._("Welcome! Please select your Minecraft instance folder (containing 'mods', 'saves', 'resourcepacks' folders) in 'Settings' by clicking 'Browse...'."))
+            self.mc_path_input.setText(self._("Path Not Configured"))
+            self.mods_path_label.setText(self._("Mods Folder: Not Configured"))
+            self.saves_path_label.setText(self._("Saves Folder: Not Configured"))
+            self.resourcepacks_path_label.setText(self._("Resourcepacks Folder: Not Configured"))
 
     def browse_minecraft_path(self):
         """
@@ -981,11 +1716,11 @@ class ZombieRoolLauncher(QMainWindow):
         # Suggest the default path as a starting point for selection (if detected)
         initial_path = self.mc_path_input.text() if self.mc_path_input.text() and os.path.exists(self.mc_path_input.text()) else (get_default_minecraft_path() if get_default_minecraft_path() else os.path.expanduser('~'))
         
-        selected_path = QFileDialog.getExistingDirectory(self, "Select Minecraft Instance Folder", initial_path)
+        selected_path = QFileDialog.getExistingDirectory(self, self._("Select Minecraft Instance Folder"), initial_path)
         if selected_path:
             self.set_minecraft_path(selected_path, show_message=True)
         else:
-            QMessageBox.warning(self, "Selection Canceled", "Minecraft folder selection canceled.")
+            QMessageBox.warning(self, self._("Selection Canceled"), self._("Minecraft folder selection canceled."))
 
     def set_minecraft_path(self, path, show_message=True):
         """
@@ -996,9 +1731,9 @@ class ZombieRoolLauncher(QMainWindow):
         sub_paths = get_minecraft_sub_paths(path)
         if sub_paths:
             self.minecraft_paths = sub_paths
-            self.mods_path_label.setText(f"Mods Folder: {self.minecraft_paths['mods']}")
-            self.saves_path_label.setText(f"Saves Folder: {self.minecraft_paths['saves']}")
-            self.resourcepacks_path_label.setText(f"Resourcepacks Folder: {self.minecraft_paths['resourcepacks']}")
+            self.mods_path_label.setText(f"{self._('Mods Folder: ')}{self.minecraft_paths['mods']}")
+            self.saves_path_label.setText(f"{self._('Saves Folder: ')}{self.minecraft_paths['saves']}")
+            self.resourcepacks_path_label.setText(f"{self._('Resourcepacks Folder: ')}{self.minecraft_paths['resourcepacks']}")
             
             # Saves the validated path to the configuration file
             config = load_config()
@@ -1006,13 +1741,13 @@ class ZombieRoolLauncher(QMainWindow):
             save_config(config)
 
             if show_message:
-                QMessageBox.information(self, "Minecraft Path Configured", 
-                                        f"The Minecraft folder has been manually configured: {path}")
+                QMessageBox.information(self, self._("Minecraft Path Configured"), 
+                                        f"{self._('The Minecraft folder has been manually configured:')} {path}")
         else:
             self.minecraft_paths = None
-            self.mods_path_label.setText("Mods Folder: Not Found or Invalid Path")
-            self.saves_path_label.setText("Saves Folder: Not Found or Invalid Path")
-            self.resourcepacks_path_label.setText("Resourcepacks Folder: Not Found or Invalid Path")
+            self.mods_path_label.setText(self._("Mods Folder: Not Found or Invalid Path"))
+            self.saves_path_label.setText(self._("Saves Folder: Not Found or Invalid Path"))
+            self.resourcepacks_path_label.setText(self._("Resourcepacks Folder: Not Found or Invalid Path"))
             
             # Removes the invalid path from the config if it existed
             config = load_config()
@@ -1021,8 +1756,8 @@ class ZombieRoolLauncher(QMainWindow):
                 save_config(config)
 
             if show_message:
-                QMessageBox.warning(self, "Invalid Path", 
-                                    "The selected path does not appear to be a valid Minecraft instance (mods, saves, resourcepacks folders not found).")
+                QMessageBox.warning(self, self._("Invalid Path"), 
+                                    self._("The selected path does not appear to be a valid Minecraft instance (mods, saves, resourcepacks folders not found)."))
 
     # --- Update Check and Processing Functions ---
     def check_for_updates(self, cache_bust=False):
@@ -1030,9 +1765,9 @@ class ZombieRoolLauncher(QMainWindow):
         Initiates the check for all updates by downloading updates.json
         from GitHub in a separate thread.
         """
-        self.header_label.setText("Checking for updates...")
-        self.mod_status_label.setText("Mod Status: Checking...")
-        self.launcher_status_label.setText("Launcher Status: Checking...")
+        self.header_label.setText(self._("Checking for updates..."))
+        self.mod_status_label.setText(self._("Mod Status: Checking..."))
+        self.launcher_status_label.setText(self._("Launcher Status: Checking..."))
         
         # Disable buttons during check to prevent multiple clicks
         self.update_mod_button.setEnabled(False)
@@ -1062,11 +1797,11 @@ class ZombieRoolLauncher(QMainWindow):
         self.remote_updates_data = self.update_checker_thread.update_data
         
         if self.remote_updates_data:
-            self.header_label.setText("ZombieRool Launcher - Updates Checked")
+            self.header_label.setText(self._("ZombieRool Launcher - Updates Checked"))
             # Only show this if it's not a background refresh (e.g., from upload/delete)
             # This logic avoids redundant pop-ups during auto-refresh
             if not self.sender() or (isinstance(self.sender(), QThread) and self.sender() not in [getattr(self, 'uploader_thread', None), getattr(self, 'deleter_thread', None)]):
-                QMessageBox.information(self, "Updates", "Update information successfully retrieved from GitHub!")
+                QMessageBox.information(self, self._("Updates"), self._("Update information successfully retrieved from GitHub!"))
             
             # Call specific update logic functions
             self._check_launcher_update_logic()
@@ -1081,8 +1816,8 @@ class ZombieRoolLauncher(QMainWindow):
         else:
             # This case should normally not be reached if error_occurred is well handled,
             # but it is a safety measure.
-            QMessageBox.critical(self, "Error", "Could not retrieve update information. Check the updates.json file URL or JSON structure.")
-            self.header_label.setText("ZombieRool Launcher - Update Error")
+            QMessageBox.critical(self, self._("Error"), self._("Could not retrieve update information. Check the updates.json file URL or JSON structure."))
+            self.header_label.setText(self._("ZombieRool Launcher - Update Error"))
             # Re-enable buttons even if there's an error if you want to allow another attempt
             self.update_mod_button.setEnabled(True)
             self.update_launcher_button.setEnabled(True)
@@ -1095,8 +1830,8 @@ class ZombieRoolLauncher(QMainWindow):
         """
         Handles displaying errors that occurred while retrieving updates.json.
         """
-        QMessageBox.critical(self, "Update Error", f"An error occurred while checking for updates: {message}")
-        self.header_label.setText("ZombieRool Launcher - Update Error")
+        QMessageBox.critical(self, self._("Update Error"), f"{self._('An error occurred while checking for updates:')} {message}")
+        self.header_label.setText(self._("ZombieRool Launcher - Update Error"))
         # Re-enable buttons in case of an error so the user can retry manually
         self.update_mod_button.setEnabled(True)
         self.update_launcher_button.setEnabled(True)
@@ -1111,7 +1846,7 @@ class ZombieRoolLauncher(QMainWindow):
         Compares the local launcher version with the remote version in remote_updates_data.
         """
         if not self.remote_updates_data or "launcher" not in self.remote_updates_data:
-            self.launcher_status_label.setText("Launcher Status: Remote info not found.")
+            self.launcher_status_label.setText(self._("Launcher Status: Remote info not found."))
             return
 
         remote_version_str = self.remote_updates_data["launcher"]["latest_version"]
@@ -1123,13 +1858,13 @@ class ZombieRoolLauncher(QMainWindow):
             local_version = QVersionNumber.fromString(local_version_str)
 
             if remote_version > local_version:
-                self.launcher_status_label.setText(f"Launcher Status: New version {remote_version_str} available! (Current: {local_version_str})")
+                self.launcher_status_label.setText(self._("Launcher Status: New version {remote_version_str} available! (Current: {local_version_str})").format(remote_version_str=remote_version_str, local_version_str=local_version_str))
                 self.update_launcher_button.setEnabled(True)
             else:
-                self.launcher_status_label.setText(f"Launcher Status: Up to date (v{local_version_str})")
+                self.launcher_status_label.setText(self._("Launcher Status: Up to date (v{local_version_str})").format(local_version_str=local_version_str))
                 self.update_launcher_button.setEnabled(False) # No update needed
         except Exception as e:
-            self.launcher_status_label.setText(f"Launcher Status: Version error ({e})")
+            self.launcher_status_label.setText(self._("Launcher Status: Version error ({e})").format(e=e))
             print(f"Launcher version comparison error: {e}")
 
     def update_launcher(self):
@@ -1138,13 +1873,13 @@ class ZombieRoolLauncher(QMainWindow):
         Starts downloading the new launcher.
         """
         if not self.remote_updates_data or "launcher" not in self.remote_updates_data:
-            QMessageBox.warning(self, "Launcher Update", "Launcher update information not found.")
+            QMessageBox.warning(self, self._("Launcher Update"), self._("Launcher update information not found."))
             return
 
         launcher_info = self.remote_updates_data["launcher"]
         download_url = launcher_info.get("download_url")
         if not download_url:
-            QMessageBox.warning(self, "Launcher Update", "Launcher download URL not found in update data.")
+            QMessageBox.warning(self, self._("Launcher Update"), self._("Launcher download URL not found in update data."))
             return
         
         # Determine temporary path for the new launcher
@@ -1154,11 +1889,11 @@ class ZombieRoolLauncher(QMainWindow):
         file_name = os.path.basename(QUrl(download_url).path())
         temp_destination_path = os.path.join(temp_dir, file_name)
 
-        QMessageBox.information(self, "Launcher Update", f"Downloading new launcher version ({launcher_info['latest_version']})...")
+        QMessageBox.information(self, self._("Launcher Update"), self._("Downloading new launcher version ({launcher_info_latest_version})...").format(launcher_info_latest_version=launcher_info['latest_version']))
         self.launcher_progress_bar.setValue(0)
         self.launcher_progress_bar.show()
         self.update_launcher_button.setEnabled(False)
-        self.launcher_status_label.setText("Downloading...")
+        self.launcher_status_label.setText(self._("Downloading..."))
 
         self.launcher_downloader = FileDownloaderThread(download_url, temp_destination_path)
         self.launcher_downloader.download_progress.connect(self.launcher_progress_bar.setValue)
@@ -1174,8 +1909,8 @@ class ZombieRoolLauncher(QMainWindow):
         Triggers the replacement of the old launcher with the new one using a helper script.
         """
         self.launcher_progress_bar.hide()
-        self.launcher_status_label.setText("Téléchargement terminé. Préparation à la mise à jour...")
-        QMessageBox.information(self, "Mise à jour Launcher", "Nouvelle version téléchargée. Le launcher va se relancer.")
+        self.launcher_status_label.setText(self._("Téléchargement terminé. Préparation à la mise à jour..."))
+        QMessageBox.information(self, self._("Erreur Mise à Jour Launcher"), self._("Nouvelle version téléchargée. Le launcher va se relancer."))
 
         current_launcher_path = os.path.abspath(sys.argv[0]) # Path to the currently running executable
         temp_update_dir = os.path.dirname(new_launcher_path) # Directory where the new launcher was downloaded
@@ -1226,15 +1961,15 @@ exit
 
             QApplication.quit() # Close the current instance of the launcher
         except Exception as e:
-            QMessageBox.critical(self, "Erreur Mise à Jour Launcher", f"Impossible de lancer la procédure de mise à jour : {e}. Veuillez redémarrer le launcher manuellement.")
-            self.launcher_status_label.setText(f"Erreur lors du lancement de la mise à jour : {e}")
+            QMessageBox.critical(self, self._("Erreur Mise à Jour Launcher"), self._("Impossible de lancer la procédure de mise à jour : {e}. Veuillez redémarrer le launcher manuellement.").format(e=e))
+            self.launcher_status_label.setText(self._("Erreur lors du lancement de la mise à jour : {e}").format(e=e))
             self.update_launcher_button.setEnabled(True) # Réactiver le bouton en cas d'échec
 
     def _handle_launcher_download_error(self, message):
         """Handles launcher download errors."""
         self.launcher_progress_bar.hide()
-        QMessageBox.critical(self, "Launcher Download Error", message)
-        self.launcher_status_label.setText(f"Download failed: {message}")
+        QMessageBox.critical(self, self._("Launcher Download Error"), message)
+        self.launcher_status_label.setText(self._("Download failed: {message}").format(message=message))
         self.update_launcher_button.setEnabled(True)
 
     # --- Mod Update Logic (implementation) ---
@@ -1243,7 +1978,7 @@ exit
         Compares the local mod version with the remote version.
         """
         if not self.remote_updates_data or "mod" not in self.remote_updates_data:
-            self.mod_status_label.setText("Mod Status: Remote info not found.")
+            self.mod_status_label.setText(self._("Mod Status: Remote info not found."))
             return
 
         remote_mod_info = self.remote_updates_data["mod"]
@@ -1253,16 +1988,16 @@ exit
         
         try:
             remote_version = QVersionNumber.fromString(remote_mod_version_str)
-            local_version = QVersionNumber.fromString(local_version_str)
+            local_version = QVersionNumber.fromString(local_mod_version_str)
 
             if remote_version > local_version:
-                self.mod_status_label.setText(f"Mod Status: New version {remote_mod_version_str} available! (Current: {local_version_str})")
+                self.mod_status_label.setText(self._("Mod Status: New version {remote_version_str} available! (Current: {local_version_str})").format(remote_version_str=remote_mod_version_str, local_version_str=local_version_str))
                 self.update_mod_button.setEnabled(True)
             else:
-                self.mod_status_label.setText(f"Mod Status: Up to date (v{local_version_str})")
+                self.mod_status_label.setText(self._("Mod Status: Up to date (v{local_version_str})").format(local_version_str=local_version_str))
                 self.update_mod_button.setEnabled(False)
         except Exception as e:
-            self.mod_status_label.setText(f"Mod Status: Version error ({e})")
+            self.mod_status_label.setText(self._("Mod Status: Version error ({e})").format(e=e))
             print(f"Mod version comparison error: {e}")
 
     def _get_local_mod_version(self):
@@ -1294,13 +2029,13 @@ exit
         Downloads and installs the mod.
         """
         if not self.minecraft_paths or not self.minecraft_paths['mods']:
-            QMessageBox.warning(self, "Installation Error", "The Minecraft 'mods' folder is not configured. Please define it in 'Settings'.")
+            QMessageBox.warning(self, self._("Installation Error"), self._("The Minecraft 'mods' folder is not configured. Please define it in 'Settings'."))
             return
         
         mod_info = self.remote_updates_data["mod"]
         download_url = mod_info.get("download_url")
         if not download_url:
-            QMessageBox.warning(self, "Mod Update", "Mod download URL not found in update data.")
+            QMessageBox.warning(self, self._("Mod Update"), self._("Mod download URL not found in update data."))
             return
 
         # Path where the temporary file will be downloaded
@@ -1309,11 +2044,11 @@ exit
         mod_filename = os.path.basename(QUrl(download_url).path())
         temp_mod_path = os.path.join(temp_download_dir, mod_filename)
 
-        QMessageBox.information(self, "Mod Update", f"Downloading mod ({mod_info['latest_version']})...")
+        QMessageBox.information(self, self._("Mod Update"), self._("Downloading mod ({mod_info_latest_version})...").format(mod_info_latest_version=mod_info['latest_version']))
         self.mod_progress_bar.setValue(0)
         self.mod_progress_bar.show()
         self.update_mod_button.setEnabled(False)
-        self.mod_status_label.setText("Downloading mod...")
+        self.mod_status_label.setText(self._("Downloading mod..."))
 
         self.mod_downloader = FileDownloaderThread(download_url, temp_mod_path)
         self.mod_downloader.download_progress.connect(self.mod_progress_bar.setValue)
@@ -1327,7 +2062,7 @@ exit
         Deletes old mod versions.
         """
         self.mod_progress_bar.hide()
-        self.mod_status_label.setText("Installing mod...")
+        self.mod_status_label.setText(self._("Installing mod..."))
         
         try:
             mod_dir = self.minecraft_paths['mods']
@@ -1339,12 +2074,12 @@ exit
 
             # Move the new downloaded mod
             shutil.move(temp_mod_path, os.path.join(mod_dir, os.path.basename(temp_mod_path)))
-            QMessageBox.information(self, "Mod Update", "Mod updated and installed successfully!")
-            self.mod_status_label.setText(f"Mod Status: Up to date (v{self.remote_updates_data['mod']['latest_version']})")
+            QMessageBox.information(self, self._("Mod Update"), self._("Mod updated and installed successfully!"))
+            self.mod_status_label.setText(self._("Mod Status: Up to date (v{local_version_str})").format(local_version_str=self.remote_updates_data['mod']['latest_version']))
             self.update_mod_button.setEnabled(False) # Disable after update
         except Exception as e:
-            QMessageBox.critical(self, "Mod Installation Error", f"An error occurred during mod installation: {e}")
-            self.mod_status_label.setText(f"Installation failed: {e}")
+            QMessageBox.critical(self, self._("Mod Installation Error"), self._("An error occurred during mod installation: {e}").format(e=e))
+            self.mod_status_label.setText(self._("Installation failed: {e}").format(e=e))
             self.update_mod_button.setEnabled(True) # Re-enable on failure
         finally:
             # Clean up temporary file
@@ -1354,8 +2089,8 @@ exit
     def _handle_mod_download_error(self, message):
         """Handles mod download errors."""
         self.mod_progress_bar.hide()
-        QMessageBox.critical(self, "Mod Download Error", message)
-        self.mod_status_label.setText(f"Download failed: {message}")
+        QMessageBox.critical(self, self._("Mod Download Error"), message)
+        self.mod_status_label.setText(self._("Download failed: {message}").format(message=message))
         self.update_mod_button.setEnabled(True)
 
     # --- Map Loading Logic for Download (implementation) ---
@@ -1371,11 +2106,16 @@ exit
                 child.widget().deleteLater()
 
         if not self.remote_updates_data or "maps" not in self.remote_updates_data:
-            map_status = QLabel("No map information available.")
+            map_status = QLabel(self._("No map information available."))
+            map_status.setStyleSheet(self.themes.get(self.current_theme, self.themes["Default"])["label_text_color"])
             self.maps_container_layout.addWidget(map_status)
+            print(f"DEBUG: _load_maps_for_download_logic: No maps array or remote data.")
             return
 
         search_query = self.map_search_input.text().lower()
+        print(f"DEBUG: _load_maps_for_download_logic called. Remote maps available: {len(self.remote_updates_data.get('maps', []))}")
+        if search_query:
+            print(f"DEBUG: Current search query: '{search_query}'")
         
         filtered_maps = []
         for map_info in self.remote_updates_data["maps"]:
@@ -1389,8 +2129,10 @@ exit
                 search_query in map_id):
                 filtered_maps.append(map_info)
 
+        print(f"DEBUG: Maps after filtering: {len(filtered_maps)}")
         if not filtered_maps:
-            no_results_label = QLabel("No maps found matching your search criteria.")
+            no_results_label = QLabel(self._("No maps found matching your search criteria."))
+            no_results_label.setStyleSheet(self.themes.get(self.current_theme, self.themes["Default"])["label_text_color"])
             self.maps_container_layout.addWidget(no_results_label)
         else:
             for map_info in filtered_maps:
@@ -1407,13 +2149,15 @@ exit
         """
         Adds a visual element for each map in the download tab.
         """
+        theme_styles = self.themes.get(self.current_theme, self.themes["Default"])
+
         map_widget = QWidget()
-        map_widget.setStyleSheet("background-color: #F8F8F8; border: 1px solid #DDD; border-radius: 5px; padding: 10px; margin-bottom: 5px;")
+        map_widget.setStyleSheet(theme_styles["map_widget"])
         map_layout = QHBoxLayout(map_widget)
         
         map_details = QVBoxLayout()
         map_details.addWidget(QLabel(f"<b>{map_info['name']}</b> <span style='color:#555;'> (v{map_info['latest_version']})</span>"))
-        map_details.addWidget(QLabel(map_info.get('description', 'No description available.'))) # Add description
+        map_details.addWidget(QLabel(map_info.get('description', self._('No description available.')))) # Translate description fallback
         map_layout.addLayout(map_details)
 
         # Progress bar specific to each map
@@ -1422,9 +2166,9 @@ exit
         map_progress_bar.hide()
         map_details.addWidget(map_progress_bar) # Add progress bar below details
 
-        download_button = QPushButton(f"Install Map")
+        download_button = QPushButton(self._("Install Map")) # Translate button text
         download_button.setFixedSize(120, 30)
-        download_button.setStyleSheet("background-color: #2ECC71; color: white; border-radius: 5px; padding: 5px;")
+        download_button.setStyleSheet(theme_styles["download_button"])
         # Pass the progress bar in addition to map information
         download_button.clicked.connect(lambda checked, info=map_info, pb=map_progress_bar: self.install_map(info, pb)) 
         map_layout.addWidget(download_button)
@@ -1437,14 +2181,14 @@ exit
         Downloads and installs the map and its associated resource pack.
         """
         if not self.minecraft_paths or not self.minecraft_paths['saves'] or not self.minecraft_paths['resourcepacks']:
-            QMessageBox.warning(self, "Installation Error", "Minecraft 'saves' or 'resourcepacks' folders are not configured. Please define them in 'Settings'.")
+            QMessageBox.warning(self, self._("Installation Error"), self._("Minecraft 'saves' or 'resourcepacks' folders are not configured. Please define them in 'Settings'."))
             return
             
         map_download_url = map_info.get("download_url")
         rp_download_url = map_info.get("resourcepack_url")
 
         if not map_download_url:
-            QMessageBox.warning(self, "Map Installation", "Map download URL not found.")
+            QMessageBox.warning(self, self._("Map Installation"), self._("Map download URL not found."))
             return
 
         # Determine temporary and destination paths
@@ -1457,8 +2201,8 @@ exit
         rp_filename = os.path.basename(QUrl(rp_download_url).path()) if rp_download_url else None
         temp_rp_path = os.path.join(temp_download_dir, rp_filename) if rp_filename else None
 
-        QMessageBox.information(self, f"Installing {map_info['name']}",
-                                f"Downloading map '{map_info['name']}'...")
+        QMessageBox.information(self, self._("Installing {map_info_name}").format(map_info_name=map_info['name']),
+                                self._("Downloading map '{map_info_name}'...").format(map_info_name=map_info['name']))
         
         progress_bar.setValue(0)
         progress_bar.show()
@@ -1479,7 +2223,7 @@ exit
         Decompresses the map, downloads and decompresses the resource pack if present.
         """
         progress_bar.hide()
-        QMessageBox.information(self, "Map Installation", f"Map '{map_name}' downloaded. Installing...")
+        QMessageBox.information(self, self._("Map Installation"), self._("Map '{map_name}' downloaded. Installing...").format(map_name=map_name))
 
         try:
             # 1. Decompress the map
@@ -1503,7 +2247,7 @@ exit
 
             # 2. Download and install the resource pack if necessary
             if rp_download_url and temp_rp_path:
-                QMessageBox.information(self, "Resource Pack Installation", "Downloading associated resource pack...")
+                QMessageBox.information(self, self._("Resource Pack Installation"), self._("Downloading associated resource pack..."))
                 progress_bar.setValue(0)
                 progress_bar.show()
 
@@ -1516,16 +2260,16 @@ exit
                 self.rp_downloader.download_error.connect(lambda msg: self._handle_map_download_error(msg, progress_bar, is_rp=True))
                 self.rp_downloader.start()
             else:
-                QMessageBox.information(self, "Installation Complete", f"Map '{map_name}' installed successfully! (No associated Resource Pack)")
+                QMessageBox.information(self, self._("Installation Complete"), self._("Map '{map_name}' installed successfully! (No associated Resource Pack)").format(map_name=map_name))
                 # Mod update check and status update is moved
                 # after full RP installation, or here if no RP.
-                self.mod_status_label.setText("Mod Status: Checking...") # Update after installation
+                self.mod_status_label.setText(self._("Mod Status: Checking...")) # Update after installation
                 self._check_mod_update_logic() # To force update check after install
                 progress_bar.hide() # Ensure bar is hidden
         except zipfile.BadZipFile:
-            QMessageBox.critical(self, "Decompression Error", "The map ZIP file is corrupted or invalid. The 'zipfile' module only supports ZIP format (not RAR).")
+            QMessageBox.critical(self, self._("Decompression Error"), self._("The map ZIP file is corrupted or invalid. The 'zipfile' module only supports ZIP format (not RAR)."))
         except Exception as e:
-            QMessageBox.critical(self, "Map Installation Error", f"An error occurred during map installation: {e}")
+            QMessageBox.critical(self, self._("Map Installation Error"), self._("An error occurred during map installation: {e}").format(e=e))
         finally:
             # Clean up temporary map file
             if os.path.exists(temp_map_path):
@@ -1540,7 +2284,7 @@ exit
         Moves the downloaded resource pack to the Minecraft resourcepacks folder.
         """
         progress_bar.hide()
-        QMessageBox.information(self, "Resource Pack Installation", "Resource pack downloaded. Installing...")
+        QMessageBox.information(self, self._("Resource Pack Installation"), self._("Resource pack downloaded. Installing..."))
         try:
             rp_dir = self.minecraft_paths['resourcepacks']
             # Resource packs are often just copied as .zip or decompressed if they contain a single folder
@@ -1552,9 +2296,9 @@ exit
                 os.remove(destination_rp_path)
 
             shutil.move(temp_rp_path, destination_rp_path)
-            QMessageBox.information(self, "Installation Complete", "Resource Pack installed successfully! Map and Resource Pack are ready.")
+            QMessageBox.information(self, self._("Installation Complete"), self._("Resource Pack installed successfully! Map and Resource Pack are ready."))
         except Exception as e:
-            QMessageBox.critical(self, "RP Installation Error", f"An error occurred during resource pack installation: {e}")
+            QMessageBox.critical(self, self._("RP Installation Error"), self._("An error occurred during resource pack installation: {e}").format(e=e))
         finally:
             # Clean up temporary RP file
             if os.path.exists(temp_rp_path):
@@ -1563,15 +2307,15 @@ exit
             if os.path.exists(os.path.dirname(temp_rp_path)) and not os.listdir(os.path.dirname(temp_rp_path)):
                 shutil.rmtree(os.path.dirname(temp_rp_path))
         
-        self.mod_status_label.setText("Mod Status: Checking...") # Update after installation
+        self.mod_status_label.setText(self._("Mod Status: Checking...")) # Update after installation
         self._check_mod_update_logic() # To force update check after install
 
 
     def _handle_map_download_error(self, message, progress_bar, is_rp=False):
         """Handles map or resource pack download errors."""
         progress_bar.hide()
-        component_name = "Resource Pack" if is_rp else "Map"
-        QMessageBox.critical(self, f"{component_name} Download Error", message)
+        component_name = self._("Resource Pack") if is_rp else self._("Map")
+        QMessageBox.critical(self, f"{component_name} {self._('Download Error')}", message)
         # Here, you could re-enable the specific map installation button if you had a reference
 
 # --- APPLICATION START ---
