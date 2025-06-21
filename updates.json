@@ -1,22 +1,30 @@
 {
-  "launcher": {
-    "latest_version": "1.0.0",
-    "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/launcher-v1.0.0/ZombieRoolLauncher.exe"
-  },
-  "mod": {
-    "name": "ZombieRool",
-    "latest_version": "1.4.0",
-    "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/release-v1.0.0-initial/ZombieRool-1.4.0.jar",
-    "changelog_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/tag/release-v1.0.0-initial"
-  },
-  "maps": [
-    {
-      "id": "asylum",
-      "name": "The Asylum Map",
-      "latest_version": "1.0.0",
-      "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/release-v1.0.0-initial/zr_asylium.zip",
-      "resourcepack_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/release-v1.0.0-initial/Asylium.Soundpack.zip",
-      "description": "Inspiré de Verruckt"
-    }
-  ]
+    "launcher": {
+        "latest_version": "1.0.0",
+        "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/launcher-v1.0.0/ZombieRoolLauncher.exe"
+    },
+    "mod": {
+        "name": "ZombieRool",
+        "latest_version": "1.4.0",
+        "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/release-v1.0.0-initial/ZombieRool-1.4.0.jar",
+        "changelog_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/tag/release-v1.0.0-initial"
+    },
+    "maps": [
+        {
+            "id": "asylum",
+            "name": "The Asylum Map",
+            "latest_version": "1.0.0",
+            "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/release-v1.0.0-initial/zr_asylium.zip",
+            "resourcepack_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/release-v1.0.0-initial/Asylium.Soundpack.zip",
+            "description": "Inspiré de Verruckt"
+        },
+        {
+            "id": "winter",
+            "name": "Blut und Schnee",
+            "latest_version": "1.0.0",
+            "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/map-winter-v1.0.0/zr_winter.zip",
+            "description": "",
+            "resourcepack_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/map-winter-v1.0.0/Blut.und.Schnee.zip"
+        }
+    ]
 }
