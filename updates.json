@@ -9,16 +9,7 @@
         "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/release-v1.0.0-initial/ZombieRool-1.4.0.jar",
         "changelog_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/tag/release-v1.0.0-initial"
     },
-    "maps": [
-        {
-            "id": "fnaf",
-            "name": "Five Night at Freddy's",
-            "latest_version": "1.0.0",
-            "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/map-fnaf-v1.0.0/zr_fnaf.zip",
-            "description": "",
-            "author": "Cryo60"
-        }
-    ],
+    "maps": [],
     "content_packs": [
         {
             "id": "kino-collection",
