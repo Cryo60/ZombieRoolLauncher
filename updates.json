@@ -31,6 +31,16 @@
             "sha256": "65fc58f10c55648f3c388ef1e43d60b5ddcbb253ea6cd76d2c7ac8d706e769c9",
             "resourcepack_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/zr_winter-resourcepack-v1.1.2/Blut.und.Schnee.Soundpack.zip",
             "resourcepack_sha256": "e15347ad644bb8d60d78a434309adfa039c3229766d84bfb6696d875c0b6cfd6"
+        },
+        {
+            "id": "zr_prison",
+            "name": "Oblivion",
+            "latest_version": "1.0.0",
+            "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/zr_prison-map-v1.0.0/zr_prison.zip",
+            "description": "Quelque part, sur l'océan, la folie a frappé les occupants d'une prison. Vous êtes les derniers survivants et vous devez vous en échapper",
+            "sha256": "f1f2a6c4285cb59f8cf5f5166435004c4039f0a8196671a01e71b2ebc275fe4b",
+            "resourcepack_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/zr_prison-resourcepack-v1.0.0/Prison.Soundpack.zip",
+            "resourcepack_sha256": "cc7a7bd79ab7af6e29c948b779c708c3f863e797e29a0bcd2674c0aca52fb1b5"
         }
     ],
     "content_packs": [
