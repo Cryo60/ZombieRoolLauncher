@@ -32,13 +32,6 @@
             "latest_version": "1.0.0",
             "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/map-fnaf-v1.0.0/zr_fnaf.zip",
             "description": ""
-        },
-        {
-            "id": "illusion",
-            "name": "Illusion",
-            "latest_version": "1.0.0",
-            "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/map-illusion-v1.0.0/zr_illusion.zip",
-            "description": ""
         }
     ],
     "content_packs": [
