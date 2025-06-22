@@ -27,7 +27,7 @@ except ImportError:
 # --- GLOBAL CONFIGURATION ---
 # Current version of your launcher. This version will be compared by the launcher
 # with the one on GitHub to know if it needs to update itself.
-__version__ = "3.0.0" 
+__version__ = "4.0.1" # Updated version
 
 # Direct URL to the updates.json file on your GitHub repository.
 # IMPORTANT: Go to your updates.json file on GitHub, click on "Raw",
@@ -89,6 +89,7 @@ def get_minecraft_sub_paths(mc_path):
     Returns None if the base path is invalid or if the subfolders do not exist.
     This function is key to validating the path chosen by the user, even if it is
     a custom instance (like those from CurseForge).
+    IMPORTANT: This function also *creates* the subfolders if they don't exist.
     """
     if mc_path and os.path.isdir(mc_path):
         paths = {
@@ -96,10 +97,8 @@ def get_minecraft_sub_paths(mc_path):
             'saves': os.path.join(mc_path, 'saves'),
             'resourcepacks': os.path.join(mc_path, 'resourcepacks')
         }
-        # Checks if all necessary subfolders exist.
-        # We don't create them here, but we ensure that the base folder exists.
-        # Added `exist_ok=True` to handle cases where folders already exist.
         try:
+            # Ensure all necessary subfolders exist, creating them if necessary.
             os.makedirs(paths['mods'], exist_ok=True)
             os.makedirs(paths['saves'], exist_ok=True)
             os.makedirs(paths['resourcepacks'], exist_ok=True)
@@ -322,7 +321,8 @@ class GitHubUploaderThread(QThread):
                 updates_data = {
                     "launcher": {"latest_version": "0.0.0", "download_url": ""},
                     "mod": {"name": "NomDuMod", "latest_version": "0.0.0", "download_url": "", "changelog_url": ""},
-                    "maps": []
+                    "maps": [],
+                    "content_packs": [] # Changed from "modpacks" to "content_packs"
                 }
             else:
                 raise # Re-raise other GitHub exceptions
@@ -528,6 +528,7 @@ class ZombieRoolLauncher(QMainWindow):
             },
             "Update": {"en": "Update", "fr": "Mise à Jour"},
             "Map Download": {"en": "Map Download", "fr": "Télécharger Cartes"},
+            "Access Code": {"en": "Access Code", "fr": "Code d'Accès"}, # Changed tab title translation
             "Upload Map": {"en": "Upload Map", "fr": "Publier Carte"},
             "Settings": {"en": "Settings", "fr": "Paramètres"},
             "ZombieRool Mod Updates": {
@@ -547,10 +548,7 @@ class ZombieRoolLauncher(QMainWindow):
                 "en": "Launcher Status: Checking...",
                 "fr": "Statut du Lanceur : Vérification..."
             },
-            "Update Launcher": {
-                "en": "Update Launcher",
-                "fr": "Mettre à Jour le Lanceur"
-            },
+            "Update Launcher": {"en": "Update Launcher", "fr": "Mettre à Jour le Lanceur"},
             "Download and Install Maps": {
                 "en": "Download and Install Maps",
                 "fr": "Télécharger et Installer des Cartes"
@@ -671,8 +669,7 @@ class ZombieRoolLauncher(QMainWindow):
                 "fr": "Dossier Sauvegardes : Non Configuré"
             },
             "Resourcepacks Folder: Not Configured": {
-                "en": "Resourcepacks Folder: Not Configured",
-                "fr": "Dossier Packs de Ressources : Non Configuré"
+                "en": "Resourcepacks Folder: Non Configuré"
             },
             "Minecraft Path Configuration": {
                 "en": "Minecraft Path Configuration",
@@ -748,9 +745,9 @@ class ZombieRoolLauncher(QMainWindow):
                 "en": "Launcher download URL not found in update data.",
                 "fr": "URL de téléchargement du lanceur introuvable dans les données de mise à jour."
             },
-            "Downloading new launcher version ({launcher_info_latest_version})...": {
-                "en": "Downloading new launcher version ({launcher_info_latest_version})...",
-                "fr": "Téléchargement de la nouvelle version du lanceur ({launcher_info_latest_version})..."
+            "Downloading new launcher version ({latest_version})...": { 
+                "en": "Downloading new launcher version ({latest_version})...",
+                "fr": "Téléchargement de la nouvelle version du lanceur ({latest_version})..."
             },
             "Downloading...": {"en": "Downloading...", "fr": "Téléchargement en cours..."},
             "Téléchargement terminé. Préparation à la mise à jour...": {
@@ -791,9 +788,9 @@ class ZombieRoolLauncher(QMainWindow):
                 "en": "Mod download URL not found in update data.",
                 "fr": "URL de téléchargement du mod introuvable dans les données de mise à jour."
             },
-            "Downloading mod ({mod_info_latest_version})...": {
-                "en": "Downloading mod ({mod_info_latest_version})...",
-                "fr": "Téléchargement du mod ({mod_info_latest_version})..."
+            "Downloading mod ({latest_version})...": {
+                "en": "Downloading mod ({latest_version})...",
+                "fr": "Téléchargement du mod ({latest_version})..."
             },
             "Downloading mod...": {"en": "Downloading mod...", "fr": "Téléchargement du mod..."},
             "Installing mod...": {"en": "Installing mod...", "fr": "Installation du mod..."},
@@ -830,14 +827,18 @@ class ZombieRoolLauncher(QMainWindow):
                 "en": "Minecraft 'saves' or 'resourcepacks' folders are not configured. Please define them in 'Settings'.",
                 "fr": "Les dossiers 'saves' ou 'resourcepacks' de Minecraft ne sont pas configurés. Veuillez les définir dans 'Paramètres'."
             },
+             "Minecraft 'mods' folder is not configured. Please define it in 'Settings'.": {
+                "en": "Minecraft 'mods' folder is not configured. Please define it in 'Settings'.",
+                "fr": "Le dossier 'mods' de Minecraft n'est pas configuré. Veuillez le définir dans 'Paramètres'."
+            },
             "Map Installation": {"en": "Map Installation", "fr": "Installation de Carte"},
             "Map download URL not found.": {
                 "en": "Map download URL not found.",
                 "fr": "URL de téléchargement de la carte introuvable."
             },
-            "Downloading map '{map_info_name}'...": {
-                "en": "Downloading map '{map_info_name}'...",
-                "fr": "Téléchargement de la carte '{map_info_name}'..."
+            "Downloading map '{map_name}'...": { 
+                "en": "Downloading map '{map_name}'...",
+                "fr": "Téléchargement de la carte '{map_name}'..."
             },
             "Map '{map_name}' downloaded. Installing...": {
                 "en": "Map '{map_name}' downloaded. Installing...",
@@ -964,9 +965,9 @@ class ZombieRoolLauncher(QMainWindow):
                 "fr": "Publication terminée ! Vérifiez GitHub."
             },
             "Publication Success": {"en": "Publication Success", "fr": "Publication Réussie"},
-            "Map '{map_info_name}' (v{map_info_latest_version}) has been successfully published to GitHub and updates.json has been updated!": {
-                "en": "Map '{map_info_name}' (v{map_info_latest_version}) has been successfully published to GitHub and updates.json has been updated!",
-                "fr": "La carte '{map_info_name}' (v{map_info_latest_version}) a été publiée avec succès sur GitHub et updates.json a été mis à jour !"
+            "Map '{map_name}' (v{map_version}) has been successfully published to GitHub and updates.json has been updated!": {
+                "en": "Map '{map_name}' (v{map_version}) has been successfully published to GitHub and updates.json has been updated!",
+                "fr": "La carte '{map_name}' (v{map_version}) a été publiée avec succès sur GitHub et updates.json a été mis à jour !"
             },
             "Publication Error": {"en": "Publication Error", "fr": "Erreur de Publication"},
             "Publication failed: {message}": {
@@ -985,6 +986,23 @@ class ZombieRoolLauncher(QMainWindow):
             "Select Theme:": {"en": "Select Theme:", "fr": "Sélectionner le Thème :"},
             "Default Theme": {"en": "Default Theme", "fr": "Thème par Défaut"},
             "Dark Theme": {"en": "Dark Theme", "fr": "Thème Sombre"},
+            # Updated translations for generic content code tab
+            "Enter Content Code:": {"en": "Enter Content Code:", "fr": "Entrez le Code d'Accès :"}, # Changed text
+            "Enter the secret code for the content pack": {"en": "Enter the secret code for the content pack", "fr": "Entrez le code secret pour le pack de contenu"}, # Changed text
+            "Download Content Pack": {"en": "Download Content Pack", "fr": "Télécharger le Pack de Contenu"}, # Changed text
+            "Content Status: Waiting for code...": {"en": "Content Status: Waiting for code...", "fr": "Statut du Contenu : En attente de code..."}, # Changed text
+            "Invalid Code.": {"en": "Invalid Code.", "fr": "Code Invalide."}, # Changed text
+            "Content information not found for code '{code}'.": {"en": "Content information not found for code '{code}'.", "fr": "Informations de contenu introuvables pour le code '{code}'."}, # Changed text
+            "Downloading Content Pack '{name}' (v{version})...": {"en": "Downloading Content Pack '{name}' (v{version})...", "fr": "Téléchargement du Pack de Contenu '{name}' (v{version})..."}, # Changed text
+            "Content Download Error": {"en": "Content Download Error", "fr": "Erreur de Téléchargement du Contenu"}, # Changed text
+            "Content Pack '{name}' downloaded. Installing...": {"en": "Content Pack '{name}' downloaded. Installing...", "fr": "Pack de Contenu '{name}' téléchargé. Installation..."}, # Changed text
+            "Content Pack installed successfully!": {"en": "Content Pack installed successfully!", "fr": "Pack de Contenu installé avec succès !"}, # Changed text
+            "Content Installation Error": {"en": "Content Installation Error", "fr": "Erreur d'Installation du Contenu"}, # Changed text
+            "An error occurred during content installation: {e}": {"en": "An error occurred during content installation: {e}", "fr": "Une erreur est survenue lors de l'installation du contenu : {e}"}, # Changed text
+            "The Minecraft 'mods' folder is not configured. Please define it in 'Settings' to install the content pack.": { # Changed text
+                "en": "The Minecraft 'mods' folder is not configured. Please define it in 'Settings' to install the content pack.",
+                "fr": "Le dossier 'mods' de Minecraft n'est pas configuré. Veuillez le définir dans 'Paramètres' pour installer le pack de contenu."
+            }
         }
 
         self.current_language = "en" # Default language
@@ -1064,17 +1082,23 @@ class ZombieRoolLauncher(QMainWindow):
         self.tabs.addTab(self.download_tab, "") # Text will be set by set_language
         self.translatable_widgets[self.tabs][1] = "Map Download"
         self.setup_download_tab()
+
+        # "Access Code" tab - NEW TAB
+        self.code_download_tab = QWidget() # Renamed from modpack_tab
+        self.tabs.addTab(self.code_download_tab, "") # Text will be set by set_language
+        self.translatable_widgets[self.tabs][2] = "Access Code" # Updated tab title
+        self.setup_code_download_tab() # Renamed setup function
         
-        # "Upload Map" tab - NEW TAB
+        # "Upload Map" tab
         self.upload_map_tab = QWidget()
         self.tabs.addTab(self.upload_map_tab, "") # Text will be set by set_language
-        self.translatable_widgets[self.tabs][2] = "Upload Map"
+        self.translatable_widgets[self.tabs][3] = "Upload Map"
         self.setup_upload_map_tab()
 
         # "Settings" tab
         self.settings_tab = QWidget()
         self.tabs.addTab(self.settings_tab, "") # Text will be set by set_language
-        self.translatable_widgets[self.tabs][3] = "Settings"
+        self.translatable_widgets[self.tabs][4] = "Settings"
         self.setup_settings_tab()
 
         # --- Footer (Status Bar / Launcher Version) ---
@@ -1086,7 +1110,10 @@ class ZombieRoolLauncher(QMainWindow):
         # --- Initialization and startup checks ---
         self.load_settings() # Load saved language and theme first
         self.load_saved_minecraft_path() # Attempts to load the saved Minecraft path
-        self.check_for_updates() # Starts checking for updates from GitHub
+        
+        # Start checking for updates from GitHub immediately on launch.
+        # This will trigger auto-update logic if a new launcher version is available.
+        self.check_for_updates() 
 
         # Apply initial language and theme based on loaded settings
         self.apply_language(self.current_language)
@@ -1101,18 +1128,7 @@ class ZombieRoolLauncher(QMainWindow):
         # Format string if args/kwargs are provided
         if args or kwargs:
             try:
-                # Handle special case for launcher_info['latest_version'] and mod_info['latest_version']
-                # Passed as launcher_info_latest_version=... or mod_info_latest_version=...
-                # Rename these keys to 'latest_version' for formatting
-                if 'launcher_info_latest_version' in kwargs:
-                    kwargs['latest_version'] = kwargs.pop('launcher_info_latest_version')
-                if 'mod_info_latest_version' in kwargs:
-                    kwargs['latest_version'] = kwargs.pop('mod_info_latest_version')
-                if 'map_info_name' in kwargs:
-                    kwargs['map_info_name_val'] = kwargs.pop('map_info_name')
-                if 'map_info_latest_version' in kwargs:
-                    kwargs['map_info_latest_version_val'] = kwargs.pop('map_info_latest_version')
-
+                # Ensure all kwargs are passed directly for formatting
                 text = text.format(*args, **kwargs)
             except KeyError as e:
                 print(f"Translation formatting error: Missing key {e} in string '{text}' for language '{self.current_language}'")
@@ -1130,6 +1146,7 @@ class ZombieRoolLauncher(QMainWindow):
         for widget, text_key in self.translatable_widgets.items():
             if isinstance(widget, QTabWidget):
                 # Special handling for tab titles
+                # The text_key for QTabWidget is a dictionary {index: "Text Key"}
                 for index, tab_key in text_key.items():
                     widget.setTabText(index, self._(tab_key))
             elif isinstance(widget, QLabel):
@@ -1139,11 +1156,7 @@ class ZombieRoolLauncher(QMainWindow):
                     widget.setText(self._(text_key))
             elif isinstance(widget, QPushButton):
                 widget.setText(self._(text_key))
-            elif isinstance(widget, QLineEdit) and hasattr(widget, 'placeholderText'):
-                # Handle placeholder text if the widget stores its key in translatable_widgets
-                # For QLineEdit placeholder, we need to know its original translation key
-                # This requires a more complex mapping or direct update
-                pass # Placeholders are handled separately in setup functions as they are fixed
+            # QLineEdit placeholders are updated separately below as they are not directly in translatable_widgets
         
         # Re-apply placeholder texts as they are not directly in translatable_widgets
         self.map_search_input.setPlaceholderText(self._("Search maps by name or description..."))
@@ -1154,6 +1167,7 @@ class ZombieRoolLauncher(QMainWindow):
         self.upload_map_description_input.setPlaceholderText(self._("Enter a brief description for the map."))
         self.mc_path_input.setPlaceholderText(self._("Click 'Browse...' to choose your Minecraft folder"))
         self.delete_map_id_input.setPlaceholderText(self._("Enter the ID of the map to delete (e.g., 'old-map-id')"))
+        self.content_code_input.setPlaceholderText(self._("Enter the secret code for the content pack")) # Updated placeholder text
 
         # Reload maps to show translated "Install Map" button if needed (or if filter changed text)
         self._load_maps_for_download_logic()
@@ -1179,7 +1193,8 @@ class ZombieRoolLauncher(QMainWindow):
 
         # Apply to section labels
         for label in [self.mod_section_label, self.launcher_section_label, 
-                      self.maps_label, self.upload_label, self.delete_label, self.settings_label]:
+                      self.maps_label, self.upload_label, self.delete_label, 
+                      self.settings_label, self.code_download_label]: # Updated label name
             label.setStyleSheet(theme_styles["section_label"])
             
         self.status_bar.setStyleSheet(theme_styles["status_bar"])
@@ -1194,13 +1209,15 @@ class ZombieRoolLauncher(QMainWindow):
         self.publish_map_button.setStyleSheet(theme_styles["publish_button"])
         self.delete_map_button.setStyleSheet(theme_styles["delete_button"])
         self.refresh_maps_button.setStyleSheet(theme_styles["refresh_button"])
+        self.download_content_button.setStyleSheet(theme_styles["download_button"]) # Updated button name
 
         # Update general label text color for dynamic labels (like status)
         # This needs to be applied to labels not covered by specific styles
         for label in [self.mod_status_label, self.launcher_status_label, 
                       self.upload_status_label, self.delete_status_label,
                       self.mc_path_label, self.mods_path_label, self.saves_path_label, 
-                      self.resourcepacks_path_label, self.language_label, self.theme_label]:
+                      self.resourcepacks_path_label, self.language_label, 
+                      self.theme_label, self.code_download_status_label]: # Updated status label name
             label.setStyleSheet(theme_styles["label_text_color"])
 
         # Save the new theme preference
@@ -1298,6 +1315,145 @@ class ZombieRoolLauncher(QMainWindow):
 
 
         layout.addStretch()
+
+    def setup_code_download_tab(self): # Renamed from setup_modpack_tab
+        """Configures the 'Access Code' tab interface.""" # Updated description
+        layout = QVBoxLayout(self.code_download_tab) # Updated tab variable
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        self.code_download_label = QLabel("", self) # Updated label name
+        layout.addWidget(self.code_download_label)
+        self.translatable_widgets[self.code_download_label] = "Enter Content Code:" # Updated text
+
+        # Content Code Input
+        code_layout = QHBoxLayout()
+        code_label = QLabel("") # Text set by apply_language
+        code_layout.addWidget(code_label)
+        self.translatable_widgets[code_label] = "Enter Content Code:" # Updated text
+
+        self.content_code_input = QLineEdit() # Renamed from modpack_code_input
+        # Placeholder text set by apply_language initially
+        self.content_code_input.setEchoMode(QLineEdit.EchoMode.Password) # Hide input
+        code_layout.addWidget(self.content_code_input)
+        layout.addLayout(code_layout)
+
+        # Download Content Button
+        self.download_content_button = QPushButton("") # Renamed from download_modpack_button
+        self.download_content_button.clicked.connect(self.download_content_by_code) # Renamed function
+        layout.addWidget(self.download_content_button)
+        self.translatable_widgets[self.download_content_button] = "Download Content Pack" # Updated text
+
+        # Status Label for Content Tab
+        self.code_download_status_label = QLabel("", self) # Renamed from modpack_status_label
+        self.code_download_status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.code_download_status_label)
+        self.translatable_widgets[self.code_download_status_label] = "Content Status: Waiting for code..." # Updated text
+
+        self.content_progress_bar = QProgressBar(self) # Renamed from modpack_progress_bar
+        self.content_progress_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.content_progress_bar.hide() # Hidden by default
+        layout.addWidget(self.content_progress_bar)
+
+        layout.addStretch()
+
+    def download_content_by_code(self): # Renamed from download_modpack_by_code
+        """
+        Handles the download of a content pack based on a secret code.
+        """
+        content_code = self.content_code_input.text().strip() # Renamed variable
+        if not content_code:
+            self.code_download_status_label.setText(self._("Please enter the secret code for the content pack")) # Updated text
+            return
+
+        # Ensure Minecraft mods folder is configured
+        if not self.minecraft_paths or not self.minecraft_paths.get('mods'):
+            QMessageBox.warning(self, self._("Installation Error"), self._("The Minecraft 'mods' folder is not configured. Please define it in 'Settings' to install the content pack.")) # Updated text
+            self.code_download_status_label.setText(self._("Minecraft 'mods' folder is not configured. Please define it in 'Settings'.")) # Updated text
+            return
+
+        if not self.remote_updates_data or "content_packs" not in self.remote_updates_data: # Renamed data key
+            self.code_download_status_label.setText(self._("Content information not found for code '{code}'.").format(code=content_code)) # Updated text
+            QMessageBox.warning(self, self._("Content Download Error"), self._("Content information not found for code '{code}'.").format(code=content_code)) # Updated text
+            return
+
+        found_content_pack = None
+        for cp_info in self.remote_updates_data["content_packs"]: # Renamed data key
+            if cp_info.get("code") == content_code:
+                found_content_pack = cp_info
+                break
+
+        if not found_content_pack:
+            self.code_download_status_label.setText(self._("Invalid Code.")) # Updated text
+            QMessageBox.warning(self, self._("Content Download Error"), self._("Invalid Code.")) # Updated text
+            return
+
+        content_pack_download_url = found_content_pack.get("download_url")
+        if not content_pack_download_url:
+            self.code_download_status_label.setText(self._("Content download URL not found for '{name}'.").format(name=found_content_pack.get('name', 'N/A'))) # Updated text
+            QMessageBox.warning(self, self._("Content Download Error"), self._("Content download URL not found for '{name}'.").format(name=found_content_pack.get('name', 'N/A'))) # Updated text
+            return
+
+        temp_download_dir = os.path.join(os.getcwd(), "temp_downloads")
+        os.makedirs(temp_download_dir, exist_ok=True)
+        content_pack_filename = os.path.basename(QUrl(content_pack_download_url).path())
+        temp_content_pack_path = os.path.join(temp_download_dir, content_pack_filename)
+
+        QMessageBox.information(self, self._("Download Content Pack"), self._("Downloading Content Pack '{name}' (v{version})...").format(name=found_content_pack['name'], version=found_content_pack['version'])) # Updated text and keys
+        
+        self.content_progress_bar.setValue(0) # Updated progress bar name
+        self.content_progress_bar.show() # Updated progress bar name
+        self.download_content_button.setEnabled(False) # Updated button name
+        self.code_download_status_label.setText(self._("Downloading Content Pack '{name}'...").format(name=found_content_pack['name'])) # Updated text
+
+        self.content_downloader = FileDownloaderThread(content_pack_download_url, temp_content_pack_path) # Renamed downloader
+        self.content_downloader.download_progress.connect(self.content_progress_bar.setValue) # Updated progress bar name
+        self.content_downloader.download_finished.connect(
+            lambda path=temp_content_pack_path, content_pack_name=found_content_pack['name']: self._install_content_from_temp(path, content_pack_name) # Renamed function
+        )
+        self.content_downloader.download_error.connect(lambda msg: self._handle_content_download_error(msg)) # Renamed function
+        self.content_downloader.start()
+
+
+    def _install_content_from_temp(self, temp_content_pack_path, content_pack_name): # Renamed from _install_modpack_from_temp
+        """
+        Decompresses and installs the content pack into the Minecraft mods folder.
+        """
+        self.content_progress_bar.hide() # Updated progress bar name
+        self.code_download_status_label.setText(self._("Content Pack '{name}' downloaded. Installing...").format(name=content_pack_name)) # Updated text
+        QMessageBox.information(self, self._("Content Installation"), self._("Content Pack '{name}' downloaded. Installing...").format(name=content_pack_name)) # Updated text
+        
+        try:
+            mods_dir = self.minecraft_paths['mods']
+            
+            with zipfile.ZipFile(temp_content_pack_path, 'r') as zip_ref:
+                # Extract all contents of the content pack directly into the mods folder
+                zip_ref.extractall(mods_dir)
+
+            QMessageBox.information(self, self._("Installation Complete"), self._("Content Pack installed successfully!")) # Updated text
+            self.code_download_status_label.setText(self._("Content Pack installed successfully!")) # Updated text
+        except zipfile.BadZipFile:
+            QMessageBox.critical(self, self._("Decompression Error"), self._("The content pack ZIP file is corrupted or invalid. The 'zipfile' module only supports ZIP format (not RAR).")) # Updated text
+            self.code_download_status_label.setText(self._("Decompression Error: Corrupted ZIP.")) # Updated text
+        except Exception as e:
+            QMessageBox.critical(self, self._("Content Installation Error"), self._("An error occurred during content installation: {e}").format(e=e)) # Updated text
+            self.code_download_status_label.setText(self._("Content Installation Error: {e}").format(e=e)) # Updated text
+        finally:
+            self.download_content_button.setEnabled(True) # Updated button name
+            if os.path.exists(temp_content_pack_path):
+                os.remove(temp_content_pack_path)
+            if os.path.exists(os.path.dirname(temp_content_pack_path)) and not os.listdir(os.path.dirname(temp_content_pack_path)):
+                shutil.rmtree(os.path.dirname(temp_content_pack_path))
+        
+        # After content pack installation, re-check mod status as mods might have changed
+        self.mod_status_label.setText(self._("Mod Status: Checking...")) 
+        self._check_mod_update_logic()
+
+    def _handle_content_download_error(self, message): # Renamed from _handle_modpack_download_error
+        """Handles content pack download errors."""
+        self.content_progress_bar.hide() # Updated progress bar name
+        QMessageBox.critical(self, self._("Content Download Error"), message) # Updated text
+        self.code_download_status_label.setText(self._("Download failed: {message}").format(message=message)) # Updated text
+        self.download_content_button.setEnabled(True) # Updated button name
 
     def setup_upload_map_tab(self):
         """Configures the 'Upload Map' tab interface."""
@@ -1536,7 +1692,7 @@ class ZombieRoolLauncher(QMainWindow):
         self.publish_map_button.setEnabled(True)
         self.upload_status_label.setText(self._("Publication complete! Check GitHub."))
         QMessageBox.information(self, self._("Publication Success"), 
-                                self._("Map '{map_info_name}' (v{map_info_latest_version}) has been successfully published to GitHub and updates.json has been updated!").format(map_info_name=map_info['name'], map_info_latest_version=map_info['latest_version']))
+                                self._("Map '{map_name}' (v{map_version}) has been successfully published to GitHub and updates.json has been updated!").format(map_name=map_info['name'], map_version=map_info['latest_version']))
         
         # Clear fields after successful upload, but keep token for convenience
         self.upload_map_id_input.clear()
@@ -1728,7 +1884,8 @@ class ZombieRoolLauncher(QMainWindow):
         Saves the path to the local configuration.
         """
         self.mc_path_input.setText(path)
-        sub_paths = get_minecraft_sub_paths(path)
+        # get_minecraft_sub_paths now handles creating directories with exist_ok=True
+        sub_paths = get_minecraft_sub_paths(path) 
         if sub_paths:
             self.minecraft_paths = sub_paths
             self.mods_path_label.setText(f"{self._('Mods Folder: ')}{self.minecraft_paths['mods']}")
@@ -1745,9 +1902,9 @@ class ZombieRoolLauncher(QMainWindow):
                                         f"{self._('The Minecraft folder has been manually configured:')} {path}")
         else:
             self.minecraft_paths = None
-            self.mods_path_label.setText(self._("Mods Folder: Not Found or Invalid Path"))
-            self.saves_path_label.setText(self._("Saves Folder: Not Found or Invalid Path"))
-            self.resourcepacks_path_label.setText(self._("Resourcepacks Folder: Not Found or Invalid Path"))
+            self.mods_path_label.setText(self._("Mods Folder: Not Detected"))
+            self.saves_path_label.setText(self._("Saves Folder: Not Detected"))
+            self.resourcepacks_path_label.setText(self._("Resourcepacks Folder: Not Detected"))
             
             # Removes the invalid path from the config if it existed
             config = load_config()
@@ -1772,6 +1929,7 @@ class ZombieRoolLauncher(QMainWindow):
         # Disable buttons during check to prevent multiple clicks
         self.update_mod_button.setEnabled(False)
         self.update_launcher_button.setEnabled(False)
+        self.download_content_button.setEnabled(False) # Updated button name
         # Disable map management buttons during update check
         self.publish_map_button.setEnabled(False)
         self.delete_map_button.setEnabled(False)
@@ -1781,6 +1939,7 @@ class ZombieRoolLauncher(QMainWindow):
         # Hide progress bars at the start of the check
         self.mod_progress_bar.hide()
         self.launcher_progress_bar.hide()
+        self.content_progress_bar.hide() # Updated progress bar name
 
         # Create and start the update checker thread
         self.update_checker_thread = UpdateCheckerThread(UPDATES_JSON_URL, cache_bust=cache_bust)
@@ -1797,21 +1956,28 @@ class ZombieRoolLauncher(QMainWindow):
         self.remote_updates_data = self.update_checker_thread.update_data
         
         if self.remote_updates_data:
-            self.header_label.setText(self._("ZombieRool Launcher - Updates Checked"))
-            # Only show this if it's not a background refresh (e.g., from upload/delete)
-            # This logic avoids redundant pop-ups during auto-refresh
-            if not self.sender() or (isinstance(self.sender(), QThread) and self.sender() not in [getattr(self, 'uploader_thread', None), getattr(self, 'deleter_thread', None)]):
-                QMessageBox.information(self, self._("Updates"), self._("Update information successfully retrieved from GitHub!"))
+            # Check for launcher update first and trigger it if available
+            launcher_update_available = self._check_launcher_update_logic()
             
-            # Call specific update logic functions
-            self._check_launcher_update_logic()
-            self._check_mod_update_logic()
-            self._load_maps_for_download_logic() # This will now filter too
-            
-            # Re-enable map management buttons after update check
-            self.publish_map_button.setEnabled(True)
-            self.delete_map_button.setEnabled(True)
-            self.refresh_maps_button.setEnabled(True) # Re-enable refresh button
+            # If a launcher update is available and triggered, the current instance will close.
+            # So, we only proceed with other updates if no launcher update was triggered.
+            if not launcher_update_available:
+                self.header_label.setText(self._("ZombieRool Launcher - Updates Checked"))
+                # Only show this if it's not a background refresh (e.g., from upload/delete)
+                # This logic avoids redundant pop-ups during auto-refresh
+                if not self.sender() or (isinstance(self.sender(), QThread) and self.sender() not in [getattr(self, 'uploader_thread', None), getattr(self, 'deleter_thread', None)]):
+                    # No longer show general success message here for more seamless auto-update
+                    pass 
+                
+                # Call specific update logic functions for mod and maps
+                self._check_mod_update_logic()
+                self._load_maps_for_download_logic() # This will now filter too
+                
+                # Re-enable buttons after update check
+                self.publish_map_button.setEnabled(True)
+                self.delete_map_button.setEnabled(True)
+                self.refresh_maps_button.setEnabled(True) # Re-enable refresh button
+                self.download_content_button.setEnabled(True) # Updated button name
 
         else:
             # This case should normally not be reached if error_occurred is well handled,
@@ -1824,6 +1990,7 @@ class ZombieRoolLauncher(QMainWindow):
             self.publish_map_button.setEnabled(True)
             self.delete_map_button.setEnabled(True)
             self.refresh_maps_button.setEnabled(True) # Re-enable refresh button
+            self.download_content_button.setEnabled(True) # Updated button name
 
 
     def handle_update_error(self, message):
@@ -1838,18 +2005,21 @@ class ZombieRoolLauncher(QMainWindow):
         self.publish_map_button.setEnabled(True)
         self.delete_map_button.setEnabled(True)
         self.refresh_maps_button.setEnabled(True) # Re-enable refresh button
-
+        self.download_content_button.setEnabled(True) # Updated button name
     
     # --- Launcher Update Logic (to be developed later) ---
     def _check_launcher_update_logic(self):
         """
         Compares the local launcher version with the remote version in remote_updates_data.
+        If a new version is available, it triggers the update process.
+        Returns True if an update was triggered, False otherwise.
         """
         if not self.remote_updates_data or "launcher" not in self.remote_updates_data:
             self.launcher_status_label.setText(self._("Launcher Status: Remote info not found."))
-            return
+            return False
 
-        remote_version_str = self.remote_updates_data["launcher"]["latest_version"]
+        launcher_info = self.remote_updates_data["launcher"]
+        remote_version_str = launcher_info["latest_version"]
         local_version_str = __version__ # Launcher version defined globally
         
         try:
@@ -1860,26 +2030,35 @@ class ZombieRoolLauncher(QMainWindow):
             if remote_version > local_version:
                 self.launcher_status_label.setText(self._("Launcher Status: New version {remote_version_str} available! (Current: {local_version_str})").format(remote_version_str=remote_version_str, local_version_str=local_version_str))
                 self.update_launcher_button.setEnabled(True)
+                
+                # Trigger auto-update if a new version is found
+                print("DEBUG: New launcher version detected. Triggering auto-update.")
+                self.update_launcher(auto_trigger=True) # Pass a flag to differentiate auto-trigger
+                return True # Indicate that an update was triggered
             else:
                 self.launcher_status_label.setText(self._("Launcher Status: Up to date (v{local_version_str})").format(local_version_str=local_version_str))
                 self.update_launcher_button.setEnabled(False) # No update needed
+                return False
         except Exception as e:
             self.launcher_status_label.setText(self._("Launcher Status: Version error ({e})").format(e=e))
             print(f"Launcher version comparison error: {e}")
+            return False
 
-    def update_launcher(self):
+    def update_launcher(self, auto_trigger=False):
         """
-        Function called when the "Update Launcher" button is clicked.
+        Function called when the "Update Launcher" button is clicked or automatically.
         Starts downloading the new launcher.
         """
         if not self.remote_updates_data or "launcher" not in self.remote_updates_data:
-            QMessageBox.warning(self, self._("Launcher Update"), self._("Launcher update information not found."))
+            if not auto_trigger: # Only show warning if manually triggered
+                QMessageBox.warning(self, self._("Launcher Update"), self._("Launcher update information not found."))
             return
 
         launcher_info = self.remote_updates_data["launcher"]
         download_url = launcher_info.get("download_url")
         if not download_url:
-            QMessageBox.warning(self, self._("Launcher Update"), self._("Launcher download URL not found in update data."))
+            if not auto_trigger: # Only show warning if manually triggered
+                QMessageBox.warning(self, self._("Launcher Update"), self._("Launcher download URL not found in update data."))
             return
         
         # Determine temporary path for the new launcher
@@ -1889,7 +2068,9 @@ class ZombieRoolLauncher(QMainWindow):
         file_name = os.path.basename(QUrl(download_url).path())
         temp_destination_path = os.path.join(temp_dir, file_name)
 
-        QMessageBox.information(self, self._("Launcher Update"), self._("Downloading new launcher version ({launcher_info_latest_version})...").format(launcher_info_latest_version=launcher_info['latest_version']))
+        if not auto_trigger: # Only show info if manually triggered
+            QMessageBox.information(self, self._("Launcher Update"), self._("Downloading new launcher version ({latest_version})...").format(latest_version=launcher_info['latest_version']))
+        
         self.launcher_progress_bar.setValue(0)
         self.launcher_progress_bar.show()
         self.update_launcher_button.setEnabled(False)
@@ -1910,7 +2091,10 @@ class ZombieRoolLauncher(QMainWindow):
         """
         self.launcher_progress_bar.hide()
         self.launcher_status_label.setText(self._("Téléchargement terminé. Préparation à la mise à jour..."))
-        QMessageBox.information(self, self._("Erreur Mise à Jour Launcher"), self._("Nouvelle version téléchargée. Le launcher va se relancer."))
+        
+        # This QMessageBox is crucial as it informs the user that the app will restart.
+        # It's okay to keep it even for auto-update to ensure user awareness.
+        QMessageBox.information(self, self._("Launcher Update"), self._("Nouvelle version téléchargée. Le launcher va se relancer."))
 
         current_launcher_path = os.path.abspath(sys.argv[0]) # Path to the currently running executable
         temp_update_dir = os.path.dirname(new_launcher_path) # Directory where the new launcher was downloaded
@@ -1984,17 +2168,21 @@ exit
         remote_mod_info = self.remote_updates_data["mod"]
         remote_mod_version_str = remote_mod_info["latest_version"]
         
-        local_mod_version_str = self._get_local_mod_version() # Get local version
+        # Ensure local_version_str is always defined before use
+        local_mod_version_str = self._get_local_mod_version() 
         
         try:
             remote_version = QVersionNumber.fromString(remote_mod_version_str)
             local_version = QVersionNumber.fromString(local_mod_version_str)
 
             if remote_version > local_version:
-                self.mod_status_label.setText(self._("Mod Status: New version {remote_version_str} available! (Current: {local_version_str})").format(remote_version_str=remote_mod_version_str, local_version_str=local_version_str))
+                # Passing named arguments to .format()
+                self.mod_status_label.setText(self._("Mod Status: New version {remote_version_str} available! (Current: {local_version_str})").format(
+                    remote_version_str=remote_mod_version_str, local_version_str=local_mod_version_str
+                ))
                 self.update_mod_button.setEnabled(True)
             else:
-                self.mod_status_label.setText(self._("Mod Status: Up to date (v{local_version_str})").format(local_version_str=local_version_str))
+                self.mod_status_label.setText(self._("Mod Status: Up to date (v{local_version_str})").format(local_version_str=local_mod_version_str))
                 self.update_mod_button.setEnabled(False)
         except Exception as e:
             self.mod_status_label.setText(self._("Mod Status: Version error ({e})").format(e=e))
@@ -2006,9 +2194,11 @@ exit
         This is a simplified implementation that assumes a file name prefix.
         A better approach would be to read a version file if the mod contains one.
         """
-        if not self.minecraft_paths or not self.minecraft_paths['mods'] or \
+        # Ensure minecraft_paths is not None and mods folder is configured
+        if not self.minecraft_paths or not self.minecraft_paths.get('mods') or \
            not os.path.isdir(self.minecraft_paths['mods']):
-            return "0.0.0" # Default version if path is invalid
+            # Provide a default version if the path is invalid or not configured
+            return "0.0.0" 
 
         mod_dir = self.minecraft_paths['mods']
         for filename in os.listdir(mod_dir):
@@ -2028,7 +2218,8 @@ exit
         Function called when the "Update Mod" button is clicked.
         Downloads and installs the mod.
         """
-        if not self.minecraft_paths or not self.minecraft_paths['mods']:
+        # Check for valid mods path before proceeding
+        if not self.minecraft_paths or not self.minecraft_paths.get('mods'):
             QMessageBox.warning(self, self._("Installation Error"), self._("The Minecraft 'mods' folder is not configured. Please define it in 'Settings'."))
             return
         
@@ -2044,7 +2235,7 @@ exit
         mod_filename = os.path.basename(QUrl(download_url).path())
         temp_mod_path = os.path.join(temp_download_dir, mod_filename)
 
-        QMessageBox.information(self, self._("Mod Update"), self._("Downloading mod ({mod_info_latest_version})...").format(mod_info_latest_version=mod_info['latest_version']))
+        QMessageBox.information(self, self._("Mod Update"), self._("Downloading mod ({latest_version})...").format(latest_version=mod_info['latest_version']))
         self.mod_progress_bar.setValue(0)
         self.mod_progress_bar.show()
         self.update_mod_button.setEnabled(False)
@@ -2075,7 +2266,9 @@ exit
             # Move the new downloaded mod
             shutil.move(temp_mod_path, os.path.join(mod_dir, os.path.basename(temp_mod_path)))
             QMessageBox.information(self, self._("Mod Update"), self._("Mod updated and installed successfully!"))
-            self.mod_status_label.setText(self._("Mod Status: Up to date (v{local_version_str})").format(local_version_str=self.remote_updates_data['mod']['latest_version']))
+            # Ensure local_version_str is defined for the status message
+            local_version_after_update = self._get_local_mod_version() 
+            self.mod_status_label.setText(self._("Mod Status: Up to date (v{local_version_str})").format(local_version_str=local_version_after_update))
             self.update_mod_button.setEnabled(False) # Disable after update
         except Exception as e:
             QMessageBox.critical(self, self._("Mod Installation Error"), self._("An error occurred during mod installation: {e}").format(e=e))
@@ -2180,7 +2373,8 @@ exit
         Function called when the "Install Map" button is clicked.
         Downloads and installs the map and its associated resource pack.
         """
-        if not self.minecraft_paths or not self.minecraft_paths['saves'] or not self.minecraft_paths['resourcepacks']:
+        # Ensure Minecraft saves and resourcepacks folders are configured and exist (get_minecraft_sub_paths creates them)
+        if not self.minecraft_paths or not self.minecraft_paths.get('saves') or not self.minecraft_paths.get('resourcepacks'):
             QMessageBox.warning(self, self._("Installation Error"), self._("Minecraft 'saves' or 'resourcepacks' folders are not configured. Please define them in 'Settings'."))
             return
             
@@ -2201,8 +2395,8 @@ exit
         rp_filename = os.path.basename(QUrl(rp_download_url).path()) if rp_download_url else None
         temp_rp_path = os.path.join(temp_download_dir, rp_filename) if rp_filename else None
 
-        QMessageBox.information(self, self._("Installing {map_info_name}").format(map_info_name=map_info['name']),
-                                self._("Downloading map '{map_info_name}'...").format(map_info_name=map_info['name']))
+        QMessageBox.information(self, self._("Map Installation"), # Changed key for consistency
+                                self._("Downloading map '{map_name}'...").format(map_name=map_info['name']))
         
         progress_bar.setValue(0)
         progress_bar.show()
@@ -2228,12 +2422,14 @@ exit
         try:
             # 1. Decompress the map
             saves_dir = self.minecraft_paths['saves']
-            # The map folder is usually the first folder inside the zip
+            
+            # Ensure the saves directory exists (it should, from set_minecraft_path, but as a safeguard)
+            os.makedirs(saves_dir, exist_ok=True)
+
             with zipfile.ZipFile(temp_map_path, 'r') as zip_ref:
                 # Extract only the first root directory or all files
                 # We assume the zip contains a single root map folder
                 map_folder_name = os.path.commonprefix(zip_ref.namelist())
-                # Use os.path.join
                 zip_ref.extractall(saves_dir)
                 extracted_path = os.path.join(saves_dir, map_folder_name.split('/')[0]) # Get the name of the root folder
                 if os.path.exists(extracted_path) and os.path.basename(extracted_path) != map_name:
@@ -2287,6 +2483,10 @@ exit
         QMessageBox.information(self, self._("Resource Pack Installation"), self._("Resource pack downloaded. Installing..."))
         try:
             rp_dir = self.minecraft_paths['resourcepacks']
+            
+            # Ensure the resourcepacks directory exists
+            os.makedirs(rp_dir, exist_ok=True)
+
             # Resource packs are often just copied as .zip or decompressed if they contain a single folder
             # We will copy the zip file directly
             destination_rp_path = os.path.join(rp_dir, rp_name)

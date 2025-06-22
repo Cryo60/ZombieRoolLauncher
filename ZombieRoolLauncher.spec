@@ -35,5 +35,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['icon\\ZombieRoolLauncherIcon.ico'],
+    icon=['C:\\Users\\aaa\\Documents\\ZombieRoolLauncher\\icon\\ZombieRoolLauncherIcon.ico'],
 )
