@@ -19,15 +19,6 @@
             "author": "Cryo60"
         },
         {
-            "id": "winter",
-            "name": "Blut und Schnee",
-            "latest_version": "1.1.0",
-            "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/map-winter-v1.1.0/Blut.und.Schnee.zip",
-            "description": "",
-            "author": "Cryo60",
-            "resourcepack_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/map-winter-v1.1.0/Blut.und.Schnee.Soundpack.zip"
-        },
-        {
             "id": "asylum",
             "name": "Asylum",
             "latest_version": "1.1.0",
