@@ -5,7 +5,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('main', 'main')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -35,5 +35,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['C:\\Users\\aaa\\Documents\\ZombieRoolLauncher\\icon\\ZombieRoolLauncherIcon.ico'],
+    icon=['icon\\ZombieRoolLauncherIcon.ico'],
 )

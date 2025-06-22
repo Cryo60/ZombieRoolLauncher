@@ -1,4 +1,5 @@
-('C:\\Users\\aaa\\Documents\\ZombieRoolLauncher\\build\\ZombieRoolLauncher\\PYZ-00.pyz',
+('C:\\Users\\aaa\\Documents\\Mes '
+ 'programmes\\ZombieRoolLauncher\\build\\ZombieRoolLauncher\\PYZ-00.pyz',
  [('PyQt6',
    'C:\\Users\\aaa\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\PyQt6\\__init__.py',
    'PYMODULE'),
@@ -1376,6 +1377,42 @@
    'PYMODULE'),
   ('lzma',
    'C:\\Users\\aaa\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\lzma.py',
+   'PYMODULE'),
+  ('main',
+   'C:\\Users\\aaa\\Documents\\Mes '
+   'programmes\\ZombieRoolLauncher\\main\\__init__.py',
+   'PYMODULE'),
+  ('main.constants',
+   'C:\\Users\\aaa\\Documents\\Mes '
+   'programmes\\ZombieRoolLauncher\\main\\constants.py',
+   'PYMODULE'),
+  ('main.downloader_threads',
+   'C:\\Users\\aaa\\Documents\\Mes '
+   'programmes\\ZombieRoolLauncher\\main\\downloader_threads.py',
+   'PYMODULE'),
+  ('main.github_threads',
+   'C:\\Users\\aaa\\Documents\\Mes '
+   'programmes\\ZombieRoolLauncher\\main\\github_threads.py',
+   'PYMODULE'),
+  ('main.github_worker_base',
+   'C:\\Users\\aaa\\Documents\\Mes '
+   'programmes\\ZombieRoolLauncher\\main\\github_worker_base.py',
+   'PYMODULE'),
+  ('main.launcher',
+   'C:\\Users\\aaa\\Documents\\Mes '
+   'programmes\\ZombieRoolLauncher\\main\\launcher.py',
+   'PYMODULE'),
+  ('main.translation_manager',
+   'C:\\Users\\aaa\\Documents\\Mes '
+   'programmes\\ZombieRoolLauncher\\main\\translation_manager.py',
+   'PYMODULE'),
+  ('main.utils',
+   'C:\\Users\\aaa\\Documents\\Mes '
+   'programmes\\ZombieRoolLauncher\\main\\utils.py',
+   'PYMODULE'),
+  ('main.widgets',
+   'C:\\Users\\aaa\\Documents\\Mes '
+   'programmes\\ZombieRoolLauncher\\main\\widgets.py',
    'PYMODULE'),
   ('mimetypes',
    'C:\\Users\\aaa\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\mimetypes.py',
