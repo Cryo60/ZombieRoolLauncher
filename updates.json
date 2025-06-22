@@ -19,6 +19,16 @@
             "sha256": "d771b2c37f959e95d4cbcc08f6ffa05c7beac40827f94c667c9cc6f600766066",
             "resourcepack_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/zr_asylum-resourcepack-v1.1.2/Asylium.Soundpack.zip",
             "resourcepack_sha256": "9f198aa7e6c549b0922fd16d3eef6845e472b27126327780c1471888363e995b"
+        },
+        {
+            "id": "zr_winter",
+            "name": "Blut und Schnee",
+            "latest_version": "1.1.2",
+            "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/zr_winter-map-v1.1.2/Blut.und.Schnee.zip",
+            "description": "",
+            "sha256": "65fc58f10c55648f3c388ef1e43d60b5ddcbb253ea6cd76d2c7ac8d706e769c9",
+            "resourcepack_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/zr_winter-resourcepack-v1.1.2/Blut.und.Schnee.Soundpack.zip",
+            "resourcepack_sha256": "e15347ad644bb8d60d78a434309adfa039c3229766d84bfb6696d875c0b6cfd6"
         }
     ],
     "content_packs": [
