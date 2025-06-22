@@ -1,7 +1,7 @@
 {
     "launcher": {
-        "latest_version": "3.0.0",
-        "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/launcher-v3.0.0/ZombieRoolLauncher.exe"
+        "latest_version": "4.1.1",
+        "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/launcher-v4.1.1/ZombieRoolLauncher.exe"
     },
     "mod": {
         "name": "ZombieRool",
@@ -16,7 +16,8 @@
             "latest_version": "1.0.0",
             "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/release-v1.0.0-initial/zr_asylium.zip",
             "resourcepack_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/release-v1.0.0-initial/Asylium.Soundpack.zip",
-            "description": "Inspiré de Verruckt"
+            "description": "Inspiré de Verruckt",
+            "author": "Cryo60"
         },
         {
             "id": "winter",
@@ -24,21 +25,16 @@
             "latest_version": "1.0.0",
             "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/map-winter-v1.0.0/zr_winter.zip",
             "description": "",
-            "resourcepack_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/map-winter-v1.0.0/Blut.und.Schnee.zip"
+            "resourcepack_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/map-winter-v1.0.0/Blut.und.Schnee.zip",
+            "author": "Cryo60"
         },
         {
             "id": "fnaf",
             "name": "Five Night at Freddy's",
             "latest_version": "1.0.0",
             "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/map-fnaf-v1.0.0/zr_fnaf.zip",
-            "description": ""
-        },
-        {
-            "id": "illusion",
-            "name": "Illusion",
-            "latest_version": "1.0.0",
-            "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/map-illusion-v1.0.0/zr_illusion.zip",
-            "description": ""
+            "description": "",
+            "author": "Cryo60"
         }
     ],
     "content_packs": [
@@ -50,5 +46,7 @@
             "description": "Modpack principal utilise par la plupart des maps",
             "code": "kino"
         }
-    ]
+    ],
+
+    "admins": ["Cryo60"]
 }
