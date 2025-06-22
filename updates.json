@@ -11,15 +11,6 @@
     },
     "maps": [
         {
-            "id": "asylum",
-            "name": "The Asylum Map",
-            "latest_version": "1.0.0",
-            "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/release-v1.0.0-initial/zr_asylium.zip",
-            "resourcepack_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/release-v1.0.0-initial/Asylium.Soundpack.zip",
-            "description": "Inspiré de Verruckt",
-            "author": "Cryo60"
-        },
-        {
             "id": "fnaf",
             "name": "Five Night at Freddy's",
             "latest_version": "1.0.0",
