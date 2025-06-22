@@ -40,5 +40,15 @@
             "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/map-illusion-v1.0.0/zr_illusion.zip",
             "description": ""
         }
+    ],
+    "content_packs": [
+        {
+            "id": "kino-collection",
+            "name": "Kino",
+            "version": "1.0.0",
+            "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/content-kino-v1.0.0/mods.zip",
+            "description": "Modpack principal utilise par la plupart des maps",
+            "code": "kino"
+        }
     ]
 }
