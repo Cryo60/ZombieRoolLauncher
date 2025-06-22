@@ -9,7 +9,18 @@
         "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/release-v1.0.0-initial/ZombieRool-1.4.0.jar",
         "changelog_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/tag/release-v1.0.0-initial"
     },
-    "maps": [],
+    "maps": [
+        {
+            "id": "zr_asylum",
+            "name": "Asylum",
+            "latest_version": "1.1.2",
+            "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/zr_asylum-map-v1.1.2/The.Asylum.Map.zip",
+            "description": "",
+            "sha256": "d771b2c37f959e95d4cbcc08f6ffa05c7beac40827f94c667c9cc6f600766066",
+            "resourcepack_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/zr_asylum-resourcepack-v1.1.2/Asylium.Soundpack.zip",
+            "resourcepack_sha256": "9f198aa7e6c549b0922fd16d3eef6845e472b27126327780c1471888363e995b"
+        }
+    ],
     "content_packs": [
         {
             "id": "kino-collection",
