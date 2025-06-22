@@ -17,15 +17,6 @@
             "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/map-fnaf-v1.0.0/zr_fnaf.zip",
             "description": "",
             "author": "Cryo60"
-        },
-        {
-            "id": "asylum",
-            "name": "Asylum",
-            "latest_version": "1.1.0",
-            "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/map-asylum-v1.1.0/The.Asylum.Map.zip",
-            "description": "",
-            "author": "Cryo60",
-            "resourcepack_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/map-asylum-v1.1.0/Asylium.Soundpack.zip"
         }
     ],
     "content_packs": [
