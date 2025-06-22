@@ -38,7 +38,8 @@
             "version": "1.0.0",
             "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/content-kino-v1.0.0/mods.zip",
             "description": "Modpack principal utilise par la plupart des maps",
-            "code": "kino"
+            "code": "kino",
+            "sha256": "d19cd0a50986838a3a4a8af6bc0ce41e70629338ca839f8af9b97b3ddcf69ded"
         }
     ],
     "admins": [
