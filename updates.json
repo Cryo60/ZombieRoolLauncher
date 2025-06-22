@@ -1,7 +1,7 @@
 {
     "launcher": {
-        "latest_version": "3.0.0",
-        "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/launcher-v3.0.0/ZombieRoolLauncher.exe"
+        "latest_version": "4.0.1",
+        "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/launcher-v4.0.1/main.exe"
     },
     "mod": {
         "name": "ZombieRool",
