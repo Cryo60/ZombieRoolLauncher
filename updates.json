@@ -41,6 +41,16 @@
             "sha256": "f1f2a6c4285cb59f8cf5f5166435004c4039f0a8196671a01e71b2ebc275fe4b",
             "resourcepack_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/zr_prison-resourcepack-v1.0.0/Prison.Soundpack.zip",
             "resourcepack_sha256": "cc7a7bd79ab7af6e29c948b779c708c3f863e797e29a0bcd2674c0aca52fb1b5"
+        },
+        {
+            "id": "zr_swamp",
+            "name": "Kumo No Mori",
+            "latest_version": "1.0.1",
+            "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/zr_swamp-map-v1.0.1/zr_swamp.zip",
+            "description": "",
+            "sha256": "ec38b945fe3ad47d7466235ade7781f72831349489c17f6e1329005e96526713",
+            "resourcepack_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/zr_swamp-resourcepack-v1.0.1/Kumo.No.Mori.RP.zip",
+            "resourcepack_sha256": "0243a2f021abe6b3685fb9e0cad5f66a7fac504a4745e946357f0f9e495ea18b"
         }
     ],
     "content_packs": [
