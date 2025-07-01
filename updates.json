@@ -6,10 +6,10 @@
     },
     "mod": {
         "name": "ZombieRool",
-        "latest_version": "1.4.2",
-        "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/zombierool-v1.4.2/ZombieRool-1.4.2.jar",
-        "changelog_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/tag/zombierool-v1.4.2",
-        "sha256": "a72c39268d5a14aaf4f75e192379c166f9e35002c5a8c44d97d06ee0e6695bd7"
+        "latest_version": "1.4.3",
+        "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/mod-v1.4.3/ZombieRool-1.4.3.jar",
+        "changelog_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/tag/mod-v1.4.3",
+        "sha256": "33a3bfb68ca1dea948c0d3a759c10221175034f2d0e461a63e98b90dddc1aef3"
     },
     "maps": [
         {
