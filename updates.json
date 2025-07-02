@@ -45,11 +45,11 @@
         {
             "id": "zr_swamp",
             "name": "Kuro No Mori",
-            "latest_version": "1.0.2",
-            "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/zr_swamp-map-v1.0.2/zr_swamp.zip",
+            "latest_version": "1.0.3",
+            "download_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/zr_swamp-map-v1.0.3/zr_swamp.zip",
             "description": "",
-            "sha256": "6a591dc25ffc4655d8b9e24864d74f40f284eee06ad944038cb2c9292172f761",
-            "resourcepack_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/zr_swamp-resourcepack-v1.0.2/Kuro.No.Mori.RP.zip",
+            "sha256": "74c286e1e11b6f648ed04bde18a381db197d29eb7ab4df440afebf0532b7c605",
+            "resourcepack_url": "https://github.com/Cryo60/ZombieRoolLauncher/releases/download/zr_swamp-resourcepack-v1.0.3/Kuro.No.Mori.RP.zip",
             "resourcepack_sha256": "0243a2f021abe6b3685fb9e0cad5f66a7fac504a4745e946357f0f9e495ea18b"
         }
     ],
